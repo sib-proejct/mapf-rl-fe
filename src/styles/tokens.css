@@ -1,0 +1,33 @@
+:root {
+  --apple-canvas: #fbfbfd;
+  --apple-surface: #ffffff;
+  --apple-surface-subtle: #ebebed;
+  --apple-border: rgba(0, 0, 0, 0.06);
+  --apple-divider: rgba(0, 0, 0, 0.04);
+  --apple-text-primary: #1d1d1f;
+  --apple-text-secondary: #86868b;
+  --apple-text-tertiary: #a1a1a6;
+  --apple-blue: #0071e3;
+  --status-ok: #248a3d;
+  --status-warning: #b25000;
+  --status-critical: #d70015;
+  --status-info: #0071e3;
+  --status-neutral: #6e6e73;
+}
+
+.dark {
+  --apple-canvas: #000000;
+  --apple-surface: #1c1c1e;
+  --apple-surface-subtle: #2c2c2e;
+  --apple-border: rgba(255, 255, 255, 0.08);
+  --apple-divider: rgba(255, 255, 255, 0.06);
+  --apple-text-primary: #f5f5f7;
+  --apple-text-secondary: #a1a1a6;
+  --apple-text-tertiary: #6e6e73;
+  --apple-blue: #2997ff;
+  --status-ok: #30d158;
+  --status-warning: #ff9f0a;
+  --status-critical: #ff453a;
+  --status-info: #64d2ff;
+  --status-neutral: #98989d;
+}

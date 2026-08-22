@@ -1,0 +1,101 @@
+@import "./tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "SF Pro Text",
+      "Inter", sans-serif;
+    letter-spacing: -0.015em;
+    background-color: var(--apple-canvas);
+    color: var(--apple-text-primary);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition:
+      background-color 0.25s ease,
+      color 0.25s ease;
+  }
+}
+
+/* Tabular numbers for coordinates, times, metrics, versions */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Minimalist Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Frosted glass header */
+.apple-glass {
+  background-color: rgba(251, 251, 253, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--apple-border);
+}
+
+.dark .apple-glass {
+  background-color: rgba(0, 0, 0, 0.85);
+  border-bottom: 1px solid var(--apple-border);
+}
+
+/* Bento Card surface */
+.apple-card {
+  background-color: var(--apple-surface);
+  border: 1px solid var(--apple-border);
+  border-radius: 1.5rem; /* 24px */
+  box-shadow:
+    0 2px 12px 0 rgba(0, 0, 0, 0.03),
+    0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark .apple-card {
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.4);
+}
+
+.apple-card:hover {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.dark .apple-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Smooth motion control */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
