@@ -32,31 +32,18 @@ export const IncidentStrip: React.FC = () => {
     isPartial;
 
   if (!hasIncidents) {
-    return (
-      <div
-        role="status"
-        className="w-full bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/20 rounded-2xl px-4 py-2 flex items-center justify-between gap-3 text-emerald-800 dark:text-emerald-300 text-xs"
-      >
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span className="font-medium">{t("incidentAllClear")}</span>
-        </div>
-        <span className="text-[11px] opacity-80 tabular-nums">
-          {robots.length} robots active
-        </span>
-      </div>
-    );
+    return null;
   }
 
   return (
     <div
       role="alert"
-      className="w-full bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-amber-900 dark:text-amber-200 text-xs"
+      className="w-full bg-[#FF9500]/10 dark:bg-[#FF9F0A]/15 border border-[#FF9500]/25 dark:border-[#FF9F0A]/30 rounded-xl p-2.5 sm:px-3.5 sm:py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[#C93400] dark:text-[#FF9F0A] text-xs transition-all duration-200 animate-fade-in"
     >
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2.5">
         {/* Safety Alert */}
         {safetyRobots.length > 0 && (
-          <div className="flex items-center gap-1.5 font-bold text-rose-600 dark:text-rose-400 bg-rose-500/15 px-2.5 py-1 rounded-lg">
+          <div className="flex items-center gap-1.5 font-bold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 px-2.5 py-1 rounded-xl">
             <ShieldAlert className="w-4 h-4 shrink-0" />
             <span>
               {t("incidentSafetyActive")}:{" "}
@@ -68,7 +55,7 @@ export const IncidentStrip: React.FC = () => {
 
         {/* Disconnected Alert */}
         {disconnectedRobots.length > 0 && (
-          <div className="flex items-center gap-1.5 font-medium text-rose-700 dark:text-rose-300 bg-rose-500/10 px-2.5 py-1 rounded-lg">
+          <div className="flex items-center gap-1.5 font-semibold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/10 dark:bg-[#FF453A]/15 px-2.5 py-1 rounded-xl">
             <WifiOff className="w-4 h-4 shrink-0" />
             <span>
               {disconnectedRobots.length} {t("incidentDisconnectedAlert")} (
@@ -79,7 +66,7 @@ export const IncidentStrip: React.FC = () => {
 
         {/* Stale Alert */}
         {isStale && (
-          <div className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-300 bg-amber-500/15 px-2.5 py-1 rounded-lg">
+          <div className="flex items-center gap-1.5 font-semibold text-[#C93400] dark:text-[#FF9F0A] bg-[#FF9500]/15 dark:bg-[#FF9F0A]/20 px-2.5 py-1 rounded-xl">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>
               {t("incidentStaleWarning")}{" "}
@@ -92,15 +79,15 @@ export const IncidentStrip: React.FC = () => {
 
         {/* Partial Alert */}
         {isPartial && (
-          <div className="flex items-center gap-1.5 font-medium text-sky-700 dark:text-sky-300 bg-sky-500/15 px-2.5 py-1 rounded-lg">
+          <div className="flex items-center gap-1.5 font-semibold text-[#0071E3] dark:text-[#2997FF] bg-[#0071E3]/15 dark:bg-[#2997FF]/20 px-2.5 py-1 rounded-xl">
             <Info className="w-4 h-4 shrink-0" />
             <span>{t("incidentPartialWarning")}</span>
           </div>
         )}
       </div>
 
-      <div className="text-[11px] opacity-75 sm:text-right shrink-0">
-        Status: <span className="font-semibold uppercase">{freshness}</span>
+      <div className="text-[11px] font-mono opacity-85 sm:text-right shrink-0">
+        Status: <span className="font-bold uppercase">{freshness}</span>
       </div>
     </div>
   );

@@ -4,10 +4,14 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
+  useRef,
 } from "react";
 import type { AuthoritativeSnapshot } from "../../domain/snapshot/types.ts";
 import type { Robot } from "../../domain/robot/types.ts";
 import type { Order } from "../../domain/order/types.ts";
+import type { MapNode, MapTopology } from "../../domain/map/types.ts";
+import { deriveMapTopology } from "../../utils/map/topology.ts";
 import {
   NormalizedProblem,
   normalizeProblem,
@@ -21,6 +25,11 @@ import {
   CANONICAL_DISCONNECTED_SNAPSHOT_FIXTURE,
   CANONICAL_PROBLEM_FIXTURE,
 } from "../../contracts/fixtures/canonical.ts";
+import {
+  generateStressSnapshot,
+  advanceStressMotion,
+  resetRobotMotionCache,
+} from "../../contracts/fixtures/stressFleet.ts";
 
 export type FixtureMode =
   | "current"
@@ -28,6 +37,8 @@ export type FixtureMode =
   | "partial"
   | "disconnected"
   | "error";
+
+export type FleetScale = 3 | 100;
 
 export interface OperationsContextType {
   snapshot: AuthoritativeSnapshot | null;
@@ -37,12 +48,20 @@ export interface OperationsContextType {
   setUseFixture: (use: boolean) => void;
   fixtureMode: FixtureMode;
   setFixtureMode: (mode: FixtureMode) => void;
+  fleetScale: FleetScale;
+  setFleetScale: (scale: FleetScale) => void;
+  isSimulatingMotion: boolean;
+  setIsSimulatingMotion: (simulating: boolean) => void;
   selectedRobotId: string | null;
   setSelectedRobotId: (id: string | null) => void;
   selectedRobot: Robot | null;
   selectedOrderId: string | null;
   setSelectedOrderId: (id: string | null) => void;
   selectedOrder: Order | null;
+  selectedNodeId: number | null;
+  setSelectedNodeId: (id: number | null) => void;
+  selectedNode: MapNode | null;
+  topology: MapTopology | null;
   refreshSnapshot: () => Promise<void>;
   lastFetchedAt: Date | null;
 }
@@ -57,17 +76,23 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
   const [snapshot, setSnapshot] = useState<AuthoritativeSnapshot | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<NormalizedProblem | null>(null);
-  const [useFixture, setUseFixture] = useState<boolean>(true); // Default to fixture mode for Phase 1 read-only verification
+  const [useFixture, setUseFixture] = useState<boolean>(true);
   const [fixtureMode, setFixtureMode] = useState<FixtureMode>("current");
+  const [fleetScale, setFleetScale] = useState<FleetScale>(3);
+  const [isSimulatingMotion, setIsSimulatingMotion] = useState<boolean>(false);
   const [selectedRobotId, setSelectedRobotId] = useState<string | null>(
     "robot-01",
   );
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
 
-  const loadFixture = useCallback((mode: FixtureMode) => {
+  const tickCounterRef = useRef<number>(0);
+
+  const loadFixture = useCallback((mode: FixtureMode, scale: FleetScale) => {
     setLoading(true);
     setError(null);
+    resetRobotMotionCache();
 
     try {
       if (mode === "error") {
@@ -90,10 +115,15 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         );
         setSnapshot(adapted);
       } else {
-        const adapted = adaptOperationsSnapshot(
+        const baseAdapted = adaptOperationsSnapshot(
           CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
         );
-        setSnapshot(adapted);
+        if (scale > 3 && baseAdapted.map) {
+          const stressSnapshot = generateStressSnapshot(scale, baseAdapted.map);
+          setSnapshot(stressSnapshot);
+        } else {
+          setSnapshot(baseAdapted);
+        }
       }
       setLastFetchedAt(new Date());
     } catch (err: unknown) {
@@ -125,25 +155,50 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const refreshSnapshot = useCallback(async () => {
     if (useFixture) {
-      loadFixture(fixtureMode);
+      loadFixture(fixtureMode, fleetScale);
     } else {
       await loadLiveSnapshot();
     }
-  }, [useFixture, fixtureMode, loadFixture, loadLiveSnapshot]);
+  }, [useFixture, fixtureMode, fleetScale, loadFixture, loadLiveSnapshot]);
 
   useEffect(() => {
     if (useFixture) {
-      loadFixture(fixtureMode);
+      loadFixture(fixtureMode, fleetScale);
     } else {
       loadLiveSnapshot();
     }
-  }, [useFixture, fixtureMode, loadFixture, loadLiveSnapshot]);
+  }, [useFixture, fixtureMode, fleetScale, loadFixture, loadLiveSnapshot]);
+
+  // Derive topology graph from map
+  const topology = useMemo(() => {
+    if (!snapshot?.map) return null;
+    return deriveMapTopology(snapshot.map);
+  }, [snapshot?.map]);
+
+  // Live motion animation tick for stress testing
+  useEffect(() => {
+    if (!isSimulatingMotion || !snapshot) return;
+
+    const interval = setInterval(() => {
+      tickCounterRef.current += 1;
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        return advanceStressMotion(prev, tickCounterRef.current, topology);
+      });
+    }, 50); // 20 updates/sec
+
+    return () => clearInterval(interval);
+  }, [isSimulatingMotion, snapshot !== null, topology]);
 
   // Derive selected entity objects
   const selectedRobot =
     snapshot?.robots.find((r) => r.id === selectedRobotId) || null;
   const selectedOrder =
     snapshot?.orders.find((o) => o.id === selectedOrderId) || null;
+  const selectedNode =
+    selectedNodeId !== null && topology?.nodeMap
+      ? topology.nodeMap.get(selectedNodeId) || null
+      : null;
 
   return (
     <OperationsContext.Provider
@@ -155,12 +210,20 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         setUseFixture,
         fixtureMode,
         setFixtureMode,
+        fleetScale,
+        setFleetScale,
+        isSimulatingMotion,
+        setIsSimulatingMotion,
         selectedRobotId,
         setSelectedRobotId,
         selectedRobot,
         selectedOrderId,
         setSelectedOrderId,
         selectedOrder,
+        selectedNodeId,
+        setSelectedNodeId,
+        selectedNode,
+        topology,
         refreshSnapshot,
         lastFetchedAt,
       }}

@@ -18,7 +18,7 @@ const AppContent: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>("operations");
 
   return (
-    <div className="min-h-screen bg-apple-canvas text-apple-text-primary flex flex-col font-sans selection:bg-apple-blue/15 selection:text-apple-blue transition-colors duration-200">
+    <div className="min-h-screen bg-[#FBFBFD] dark:bg-black text-[#1D1D1F] dark:text-[#F5F5F7] flex flex-col font-sans selection:bg-[#0071E3]/15 selection:text-[#0071E3] transition-colors duration-300">
       {/* 1. Frosted Glass Top Navigation Bar */}
       <TopNavBar
         currentTab={currentTab}
@@ -37,16 +37,23 @@ const AppContent: React.FC = () => {
         {currentTab === "events" && <EventsPage />}
       </main>
 
-      {/* 3. Apple-style Minimalist Footer */}
-      <footer className="border-t border-apple-border bg-apple-surface/60 py-6 px-4 sm:px-6 text-xs text-apple-text-secondary transition-colors duration-200">
-        <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="font-medium text-apple-text-primary">
+      {/* 3. Apple Minimalist Footer */}
+      <footer className="border-t border-black/[0.04] dark:border-white/[0.08] bg-[#FBFBFD] dark:bg-black py-8 px-4 sm:px-6 lg:px-8 xl:px-10 text-xs text-[#86868B] font-sans transition-colors duration-300">
+        <div className="max-w-[1920px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Left: Copyright */}
+          <div className="font-medium text-[#1D1D1F] dark:text-[#F5F5F7]">
             {t("footerCopyright")}
           </div>
-          <div className="flex items-center gap-4 text-apple-text-tertiary">
+
+          {/* Right: Technical Metadata & Status */}
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-[#86868B]">
             <span>Phase 1 — Read-only Operator Client</span>
-            <span>•</span>
-            <span>Cartesian Right-Handed (+X East, +Y North, CCW Yaw)</span>
+            <span className="hidden sm:inline text-[#D2D2D7] dark:text-[#3A3A3C]">
+              |
+            </span>
+            <span className="font-mono text-[11px]">
+              Cartesian (+X East, +Y North, CCW Yaw)
+            </span>
           </div>
         </div>
       </footer>

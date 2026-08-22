@@ -1,96 +1,186 @@
 import React from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
-import { Box, Flag, Bot, Clock } from "lucide-react";
+import { Box, Flag, Bot, Clock, ArrowRight, CheckCircle2 } from "lucide-react";
 import { formatStateAge } from "../../utils/time/time.ts";
 
-export const OrderList: React.FC = () => {
+export interface OrderListProps {
+  embedded?: boolean;
+}
+
+export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
   const { t } = useAppConfig();
   const { snapshot, selectedOrderId, setSelectedOrderId, setSelectedRobotId } =
     useOperations();
 
   const orders = snapshot?.orders || [];
 
+  const getLifecycleDot = (state: string) => {
+    switch (state) {
+      case "Executing":
+        return "bg-[#34C759] dark:bg-[#30D158]";
+      case "Applied":
+      case "Dispatched":
+      case "Dispatchable":
+        return "bg-[#0071E3] dark:bg-[#2997FF]";
+      case "Planning":
+      case "Submitted":
+        return "bg-[#AF52DE]";
+      case "Held":
+      case "Replanning":
+        return "bg-[#FF9500] dark:bg-[#FF9F0A]";
+      case "Cancelled":
+      case "Rejected":
+        return "bg-[#FF3B30] dark:bg-[#FF453A]";
+      case "Completed":
+      default:
+        return "bg-[#86868B]";
+    }
+  };
+
   const getLifecycleBadge = (state: string) => {
     switch (state) {
       case "Executing":
-        return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20";
+        return "bg-[#34C759]/10 text-[#248A3D] dark:text-[#30D158] border-[#34C759]/20";
       case "Applied":
-        return "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/20";
       case "Dispatched":
       case "Dispatchable":
-        return "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20";
+        return "bg-[#0071E3]/10 text-[#0071E3] dark:text-[#2997FF] border-[#0071E3]/20";
       case "Planning":
       case "Submitted":
-        return "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20";
+        return "bg-[#AF52DE]/10 text-[#AF52DE] border-[#AF52DE]/20";
       case "Held":
       case "Replanning":
-        return "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20";
-      case "Completed":
-        return "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/20";
+        return "bg-[#FF9500]/10 text-[#C93400] dark:text-[#FF9F0A] border-[#FF9500]/20";
       case "Cancelled":
       case "Rejected":
-        return "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20";
+        return "bg-[#FF3B30]/10 text-[#D70015] dark:text-[#FF453A] border-[#FF3B30]/20";
+      case "Completed":
       default:
-        return "bg-black/5 dark:bg-white/10 text-apple-text-secondary";
+        return "bg-black/5 dark:bg-white/10 text-[#6E6E73] dark:text-[#86868B] border-transparent";
+    }
+  };
+
+  const getLifecycleStepIndex = (state: string) => {
+    switch (state) {
+      case "Submitted":
+        return 0;
+      case "Planning":
+        return 1;
+      case "Dispatched":
+      case "Applied":
+      case "Dispatchable":
+        return 2;
+      case "Executing":
+        return 3;
+      case "Completed":
+        return 4;
+      default:
+        return 2;
     }
   };
 
   return (
-    <div className="apple-card p-4 space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-apple-divider pb-2.5">
-        <div className="flex items-center gap-2">
-          <Box className="w-4 h-4 text-apple-blue" />
-          <h3 className="text-sm font-bold text-apple-text-primary">
-            {t("orderListTitle")}
-          </h3>
-          <span className="text-xs font-mono font-bold bg-black/5 dark:bg-white/10 text-apple-text-secondary px-1.5 py-0.5 rounded-full">
-            {orders.length}
-          </span>
+    <div
+      className={
+        embedded
+          ? "flex flex-col h-full overflow-hidden"
+          : "apple-card p-4 sm:p-5 flex flex-col h-[560px] sm:h-[600px] transition-colors duration-300"
+      }
+    >
+      {/* Header (only shown when not embedded) */}
+      {!embedded && (
+        <div className="flex items-center justify-between gap-2 mb-3.5 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg bg-[#0071E3]/10 dark:bg-[#2997FF]/15 flex items-center justify-center text-[#0071E3] dark:text-[#2997FF]">
+              <Box className="w-3.5 h-3.5" />
+            </div>
+            <h3 className="text-sm font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight">
+              {t("orderListTitle")}
+            </h3>
+            <span className="text-[11px] font-mono font-bold bg-[#F5F5F7] dark:bg-[#252528] text-[#86868B] px-2 py-0.5 rounded-full border border-black/[0.04] dark:border-white/[0.06] tabular-nums">
+              {orders.length}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Orders List */}
-      <div className="space-y-2">
+      <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
         {orders.length === 0 ? (
-          <div className="py-8 text-center text-xs text-apple-text-tertiary">
+          <div className="py-12 text-center text-xs text-[#86868B] font-medium">
             {t("orderNoOrders")}
           </div>
         ) : (
           orders.map((order) => {
             const isSelected = order.id === selectedOrderId;
+            const stepIdx = getLifecycleStepIndex(order.state);
 
             return (
               <div
                 key={`order-card-${order.id}`}
                 onClick={() => setSelectedOrderId(order.id)}
-                className={`p-3 rounded-xl border transition-all cursor-pointer space-y-2 ${
+                className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-2.5 outline-none ${
                   isSelected
-                    ? "bg-apple-blue/10 border-apple-blue shadow-xs font-semibold"
-                    : "bg-apple-surface hover:bg-black/[0.02] dark:hover:bg-white/[0.04] border-apple-border"
+                    ? "bg-[#0071E3]/[0.08] dark:bg-[#2997FF]/15 border-[#0071E3]/50 dark:border-[#2997FF]/60 shadow-xs ring-1 ring-[#0071E3]/20"
+                    : "bg-white dark:bg-[#1C1C1E] hover:bg-[#F5F5F7]/80 dark:hover:bg-[#252528]/80 border-black/[0.05] dark:border-white/[0.07] hover:border-black/15 dark:hover:border-white/20"
                 }`}
               >
-                {/* Order Top Bar */}
+                {/* Order Top Bar: ID & State Pill */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-mono text-xs font-bold text-apple-text-primary">
+                  <div className="flex items-center gap-2 font-mono text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
                     <span>{order.id}</span>
-                    <span className="text-[10px] font-normal text-apple-text-secondary bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded">
-                      update #{order.orderUpdateId}
+                    <span className="text-[10px] font-normal text-[#86868B] bg-[#F5F5F7] dark:bg-[#252528] px-1.5 py-0.5 rounded-full border border-black/[0.04] dark:border-white/[0.06]">
+                      #{order.orderUpdateId}
                     </span>
                   </div>
 
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${getLifecycleBadge(
+                  <div
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${getLifecycleBadge(
                       order.state,
                     )}`}
                   >
-                    {order.state}
-                  </span>
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${getLifecycleDot(
+                        order.state,
+                      )}`}
+                    />
+                    <span>{order.state}</span>
+                  </div>
+                </div>
+
+                {/* Micro Lifecycle Step Bar */}
+                <div className="flex items-center gap-1 py-1">
+                  {["Plan", "Route", "Dispatch", "Exec"].map((step, idx) => {
+                    const isDone = idx <= stepIdx;
+                    return (
+                      <div
+                        key={`step-${idx}`}
+                        className="flex-1 flex flex-col gap-1"
+                      >
+                        <div
+                          className={`h-1 rounded-full transition-all duration-300 ${
+                            isDone
+                              ? "bg-[#0071E3] dark:bg-[#2997FF]"
+                              : "bg-[#F5F5F7] dark:bg-[#252528]"
+                          }`}
+                        />
+                        <span
+                          className={`text-[9px] text-center font-medium ${
+                            isDone
+                              ? "text-[#0071E3] dark:text-[#2997FF] font-semibold"
+                              : "text-[#86868B]"
+                          }`}
+                        >
+                          {step}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Assignments List */}
-                <div className="space-y-1 text-xs">
+                <div className="space-y-1.5 text-xs">
                   {order.assignments.map((assign, aIdx) => (
                     <div
                       key={`assign-${aIdx}`}
@@ -98,17 +188,17 @@ export const OrderList: React.FC = () => {
                         e.stopPropagation();
                         setSelectedRobotId(assign.robotId);
                       }}
-                      className="flex items-center justify-between text-[11px] bg-apple-surface-subtle px-2 py-1 rounded-lg hover:bg-apple-blue/15 transition-colors group"
+                      className="flex items-center justify-between text-[11px] bg-[#F5F5F7] dark:bg-[#252528] px-2.5 py-1.5 rounded-xl hover:bg-[#0071E3]/15 transition-colors group cursor-pointer border border-black/[0.02] dark:border-white/[0.03]"
                     >
                       <div className="flex items-center gap-1.5 font-mono">
-                        <Bot className="w-3 h-3 text-apple-blue" />
-                        <span className="font-semibold text-apple-text-primary group-hover:text-apple-blue">
+                        <Bot className="w-3.5 h-3.5 text-[#0071E3] dark:text-[#2997FF]" />
+                        <span className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] group-hover:text-[#0071E3] dark:group-hover:text-[#2997FF]">
                           {assign.robotId}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1 font-mono tabular-nums text-apple-text-secondary">
-                        <Flag className="w-3 h-3 text-apple-blue" />
+                      <div className="flex items-center gap-1 font-mono tabular-nums text-[#86868B]">
+                        <Flag className="w-3 h-3 text-[#0071E3] dark:text-[#2997FF]" />
                         <span>
                           Goal ({assign.goalColumn}, {assign.goalRow})
                         </span>
@@ -119,11 +209,12 @@ export const OrderList: React.FC = () => {
 
                 {/* Submitted / Updated At */}
                 {order.submittedAtUtc && (
-                  <div className="flex items-center gap-1 text-[10px] font-mono text-apple-text-tertiary pt-1 border-t border-apple-divider">
-                    <Clock className="w-3 h-3" />
-                    <span>
-                      Submitted {formatStateAge(order.submittedAtUtc)}
-                    </span>
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[#86868B] pt-1.5 border-t border-black/[0.03] dark:border-white/[0.05]">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      <span>Submitted</span>
+                    </div>
+                    <span>{formatStateAge(order.submittedAtUtc)}</span>
                   </div>
                 )}
               </div>

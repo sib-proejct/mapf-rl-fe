@@ -6,20 +6,39 @@ export default {
     extend: {
       colors: {
         apple: {
-          canvas: "var(--apple-canvas)",
-          surface: "var(--apple-surface)",
-          "surface-subtle": "var(--apple-surface-subtle)",
-          border: "var(--apple-border)",
-          divider: "var(--apple-divider)",
+          canvas: "#F5F5F7",
+          surface: "#FFFFFF",
+          subtle: "#EBEBED",
+          border: "rgba(0, 0, 0, 0.06)",
+          divider: "rgba(0, 0, 0, 0.04)",
           text: {
-            primary: "var(--apple-text-primary)",
-            secondary: "var(--apple-text-secondary)",
-            tertiary: "var(--apple-text-tertiary)",
+            primary: "#1D1D1F",
+            secondary: "#86868B",
+            tertiary: "#A1A1A6",
           },
           blue: {
-            DEFAULT: "var(--apple-blue)",
+            DEFAULT: "#0071E3",
             hover: "#0077ED",
-            light: "rgba(0, 113, 227, 0.12)",
+            light: "#E8F2FD",
+          },
+          green: {
+            DEFAULT: "#34C759",
+            light: "#EAF8EE",
+            dark: "#248A3D",
+          },
+          red: {
+            DEFAULT: "#FF3B30",
+            light: "#FEECEB",
+            dark: "#D70015",
+          },
+          orange: {
+            DEFAULT: "#FF9500",
+            light: "#FFF4E5",
+            dark: "#C93400",
+          },
+          gold: {
+            DEFAULT: "#D97706",
+            light: "#FEF3C7",
           },
         },
         status: {
@@ -32,23 +51,30 @@ export default {
       },
       fontFamily: {
         sans: [
-          "SF Pro Display",
-          "SF Pro Text",
           "Pretendard",
-          "Inter",
           "-apple-system",
           "BlinkMacSystemFont",
+          "SF Pro Display",
+          "SF Pro Text",
+          "Inter",
+          "Nanum Gothic",
           "system-ui",
           "sans-serif",
         ],
         mono: [
-          "JetBrains Mono",
           "SF Mono",
-          "ui-monospace",
+          "JetBrains Mono",
           "Menlo",
           "Monaco",
           "Consolas",
           "monospace",
+        ],
+        serif: [
+          "Newsreader",
+          "Noto Serif KR",
+          "Georgia",
+          "Nanum Myeongjo",
+          "serif",
         ],
       },
       boxShadow: {
@@ -58,6 +84,8 @@ export default {
           "0 4px 20px 0 rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06)",
         "apple-hover":
           "0 8px 24px 0 rgba(0, 0, 0, 0.08), 0 2px 6px 0 rgba(0, 0, 0, 0.04)",
+        "apple-pill": "0 1px 3px 0 rgba(0, 0, 0, 0.08)",
+        "apple-modal": "0 20px 48px -12px rgba(0, 0, 0, 0.16)",
         "apple-drawer": "-8px 0 32px 0 rgba(0, 0, 0, 0.12)",
         "apple-drawer-dark": "-8px 0 32px 0 rgba(0, 0, 0, 0.5)",
       },

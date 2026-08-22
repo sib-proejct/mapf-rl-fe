@@ -5,9 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MAPF-RL Operator Interface</title>
+
+    <!-- Google Fonts: Nanum Gothic, Plus Jakarta Sans, Inter, JetBrains Mono, Noto Serif KR, Newsreader -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,600&family=Noto+Serif+KR:wght@400;600;700;900&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Pretendard Web Font -->
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css"
     />
     <script>
       // Apply theme class before initial render to prevent flash
@@ -27,7 +37,9 @@
       })();
     </script>
   </head>
-  <body class="bg-apple-canvas text-apple-text-primary antialiased">
+  <body
+    class="bg-[#FBFBFD] dark:bg-black text-[#1D1D1F] dark:text-[#F5F5F7] antialiased min-h-screen selection:bg-[#0071E3]/15 selection:text-[#0071E3] overflow-x-hidden font-sans"
+  >
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
