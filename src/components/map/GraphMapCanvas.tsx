@@ -1107,6 +1107,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
               );
 
               const isExecuting = robot.operationalState === "EXECUTING";
+              const isCharging = robot.operationalState === "CHARGING";
               const isDisconnected = robot.connectivity === "DISCONNECTED";
               const isSafetyAlert =
                 robot.safety !== "NORMAL" && robot.safety !== "WAIT";
@@ -1115,11 +1116,15 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                 ? "#FF453A"
                 : isSafetyAlert
                   ? "#FF9F0A"
-                  : isExecuting
-                    ? "#30D158"
-                    : isDark
-                      ? "#2997FF"
-                      : "#0071E3";
+                  : isCharging
+                    ? isDark
+                      ? "#FFD60A"
+                      : "#FF9500"
+                    : isExecuting
+                      ? "#30D158"
+                      : isDark
+                        ? "#2997FF"
+                        : "#0071E3";
 
               const robotRadius = cellMin * 0.38;
               const haloRadius = robotRadius * 1.6;

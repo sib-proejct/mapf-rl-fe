@@ -1244,6 +1244,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
               );
 
               const isExecuting = robot.operationalState === "EXECUTING";
+              const isCharging = robot.operationalState === "CHARGING";
               const isDisconnected = robot.connectivity === "DISCONNECTED";
               const isSafetyAlert =
                 robot.safety !== "NORMAL" && robot.safety !== "WAIT";
@@ -1252,9 +1253,11 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
                 ? "#FF453A"
                 : isSafetyAlert
                   ? "#FF9F0A"
-                  : isExecuting
-                    ? "#30D158"
-                    : "#0071E3";
+                  : isCharging
+                    ? "#FF9500"
+                    : isExecuting
+                      ? "#30D158"
+                      : "#0071E3";
 
               const cellW = baseWidth / widthCells;
               const cellH = baseHeight / heightCells;

@@ -704,6 +704,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
       const isSelected = robot.id === selectedRobotId;
       const isExecuting = robot.operationalState === "EXECUTING";
+      const isCharging = robot.operationalState === "CHARGING";
       const isDisconnected = robot.connectivity === "DISCONNECTED";
       const isSafetyAlert =
         robot.safety !== "NORMAL" && robot.safety !== "WAIT";
@@ -712,11 +713,15 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
         ? "#FF453A"
         : isSafetyAlert
           ? "#FF9F0A"
-          : isExecuting
-            ? "#30D158"
-            : isDark
-              ? "#2997FF"
-              : "#0071E3";
+          : isCharging
+            ? isDark
+              ? "#FFD60A"
+              : "#FF9500"
+            : isExecuting
+              ? "#30D158"
+              : isDark
+                ? "#2997FF"
+                : "#0071E3";
 
       ctx.save();
       ctx.translate(screenPos.x, screenPos.y);

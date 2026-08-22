@@ -740,18 +740,22 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                             className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                               isExecuting
                                 ? "bg-[#34C759]"
-                                : robot.operationalState === "HELD"
-                                  ? "bg-[#FF9500] dark:bg-[#FF9F0A]"
-                                  : "bg-[#86868B]"
+                                : robot.operationalState === "CHARGING"
+                                  ? "bg-[#FF9F0A] dark:bg-[#FFD60A]"
+                                  : robot.operationalState === "HELD"
+                                    ? "bg-[#FF9500] dark:bg-[#FF9F0A]"
+                                    : "bg-[#86868B]"
                             }`}
                           />
                           <span
                             className={`font-semibold ${
                               isExecuting
                                 ? "text-[#34C759] dark:text-[#30D158]"
-                                : robot.operationalState === "HELD"
-                                  ? "text-[#FF9500] dark:text-[#FF9F0A]"
-                                  : "text-[#86868B]"
+                                : robot.operationalState === "CHARGING"
+                                  ? "text-[#B25000] dark:text-[#FFD60A]"
+                                  : robot.operationalState === "HELD"
+                                    ? "text-[#FF9500] dark:text-[#FF9F0A]"
+                                    : "text-[#86868B]"
                             }`}
                           >
                             {robot.operationalState}

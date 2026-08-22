@@ -7,6 +7,7 @@ export type RobotOperationalState =
   | "EXECUTING"
   | "HELD"
   | "STOPPED"
+  | "CHARGING"
   | "UNKNOWN";
 
 export type ConnectivityState = "CONNECTED" | "DEGRADED" | "DISCONNECTED";

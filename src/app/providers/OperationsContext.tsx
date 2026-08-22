@@ -56,7 +56,7 @@ export type FixtureMode =
   | "disconnected"
   | "error";
 
-export type FleetScale = 3 | 100;
+export type FleetScale = 4 | 100;
 
 export interface OperationsContextType {
   // Snapshot and operational entity state
@@ -124,7 +124,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
 
   // Fleet settings
-  const [fleetScale, setFleetScale] = useState<FleetScale>(3);
+  const [fleetScale, setFleetScale] = useState<FleetScale>(4);
   const [isSimulatingMotion, setIsSimulatingMotion] = useState<boolean>(true);
 
   // Transports & simulation modes
@@ -204,7 +204,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
             CANONICAL_DISCONNECTED_SNAPSHOT_FIXTURE,
           );
         } else {
-          if (fleetScale > 3) {
+          if (fleetScale > 4) {
             snapshotData = generateStressSnapshot(
               fleetScale,
               MEGA_WAREHOUSE_MAP_FIXTURE,

@@ -270,6 +270,14 @@ const RobotCard = memo<RobotCardProps>(
           bg: "bg-[#34C759]/10 dark:bg-[#30D158]/15 border-[#34C759]/20",
         };
       }
+      if (r.operationalState === "CHARGING") {
+        return {
+          label: "Charging",
+          dot: "bg-[#FF9F0A] dark:bg-[#FFD60A] animate-pulse",
+          text: "text-[#B25000] dark:text-[#FFD60A]",
+          bg: "bg-[#FF9F0A]/10 dark:bg-[#FFD60A]/15 border-[#FF9F0A]/20",
+        };
+      }
       return {
         label: "Idle",
         dot: "bg-[#86868B]",
@@ -400,7 +408,9 @@ export const RobotList: React.FC<RobotListProps> = ({ embedded = false }) => {
       const matchesFilter =
         filterState === "ALL" ||
         (filterState === "EXECUTING" && r.operationalState === "EXECUTING") ||
-        (filterState === "IDLE" && r.operationalState === "IDLE") ||
+        (filterState === "IDLE" &&
+          (r.operationalState === "IDLE" ||
+            r.operationalState === "CHARGING")) ||
         (filterState === "DISCONNECTED" && r.connectivity === "DISCONNECTED");
 
       return matchesSearch && matchesFilter;

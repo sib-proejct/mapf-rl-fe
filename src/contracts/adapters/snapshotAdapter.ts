@@ -125,7 +125,7 @@ export function adaptOperationsSnapshot(
       };
 
       const operationalState: RobotOperationalState = (
-        ["IDLE", "EXECUTING", "HELD", "STOPPED"].includes(
+        ["IDLE", "EXECUTING", "HELD", "STOPPED", "CHARGING"].includes(
           String(payload.operationalState || payload.state).toUpperCase(),
         )
           ? String(payload.operationalState || payload.state).toUpperCase()

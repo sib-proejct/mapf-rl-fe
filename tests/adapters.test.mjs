@@ -38,7 +38,7 @@ test("adaptOperationsSnapshot adapts canonical operations snapshot fixture", () 
   assert.equal(snapshot.contractVersion, "1.0.0");
   assert.equal(snapshot.freshness, "CURRENT");
   assert.equal(snapshot.cursor.eventSequence, 1420);
-  assert.equal(snapshot.robots.length, 3);
+  assert.equal(snapshot.robots.length, 4);
   assert.equal(snapshot.orders.length, 2);
 
   const robot01 = snapshot.robots.find((r) => r.id === "robot-01");
@@ -48,6 +48,13 @@ test("adaptOperationsSnapshot adapts canonical operations snapshot fixture", () 
   assert.equal(robot01.operationalState, "EXECUTING");
   assert.equal(robot01.connectivity, "CONNECTED");
   assert.equal(robot01.currentOrderId, "order-01");
+
+  const robot04 = snapshot.robots.find((r) => r.id === "robot-04");
+  assert.ok(robot04);
+  assert.equal(robot04.pose.xMeters, 31.5);
+  assert.equal(robot04.pose.yMeters, 4.5);
+  assert.equal(robot04.operationalState, "CHARGING");
+  assert.equal(robot04.batteryPercent, 42);
 
   const order01 = snapshot.orders.find((o) => o.id === "order-01");
   assert.ok(order01);

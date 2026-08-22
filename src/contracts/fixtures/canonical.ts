@@ -144,7 +144,7 @@ export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {
       data: {
         simulationTimeMs: 12400,
         occurredAt: "2026-08-22T04:29:59.850Z",
-        pose: { xMeters: 30.5, yMeters: 8.5, yawRadians: 0.0 }, // facing East (at Charger-03 on East wall)
+        pose: { xMeters: 31.5, yMeters: 8.5, yawRadians: 0.0 }, // facing East (at Charger-03 on East wall)
         operationalState: "IDLE",
         connectivity: "CONNECTED",
         freshness: "CURRENT",
@@ -156,6 +156,29 @@ export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {
         sessionEpoch: 4,
         simulatorId: "sim-01",
         batteryPercent: 99,
+      },
+    },
+    {
+      entityType: "ROBOT",
+      entityId: "robot-04",
+      entityVersion: 18,
+      contentDigestSha256:
+        "7777777777777777777777777777777777777777777777777777777777777777",
+      data: {
+        simulationTimeMs: 12400,
+        occurredAt: "2026-08-22T04:29:59.800Z",
+        pose: { xMeters: 31.5, yMeters: 4.5, yawRadians: 0.0 }, // facing East (at Charger-01 on East wall)
+        operationalState: "CHARGING",
+        connectivity: "CONNECTED",
+        freshness: "CURRENT",
+        safety: "NORMAL",
+        activeController: {
+          mode: "BASELINE",
+          identity: "cardinal-baseline/1.0.0",
+        },
+        sessionEpoch: 4,
+        simulatorId: "sim-01",
+        batteryPercent: 42,
       },
     },
     {

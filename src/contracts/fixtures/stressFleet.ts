@@ -206,11 +206,20 @@ export function advanceStressMotion(
       robot.connectivity === "DISCONNECTED" ||
       robot.operationalState === "IDLE" ||
       robot.operationalState === "HELD" ||
+      robot.operationalState === "CHARGING" ||
       robot.safety === "CONTROLLED_STOP"
     ) {
+      const isCharging = robot.operationalState === "CHARGING";
+      const batteryPercent = isCharging
+        ? Math.min(
+            100,
+            (robot.batteryPercent ?? 42) + (_tickCount % 10 === 0 ? 1 : 0),
+          )
+        : robot.batteryPercent;
       return {
         ...robot,
         simulationTimeMs: robot.simulationTimeMs + 50,
+        batteryPercent,
       };
     }
 

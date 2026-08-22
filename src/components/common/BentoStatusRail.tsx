@@ -46,7 +46,8 @@ export const BentoStatusRail: React.FC = () => {
           executing++;
         } else if (
           r.operationalState === "IDLE" ||
-          r.operationalState === "HELD"
+          r.operationalState === "HELD" ||
+          r.operationalState === "CHARGING"
         ) {
           heldOrIdle++;
         }
@@ -71,7 +72,7 @@ export const BentoStatusRail: React.FC = () => {
       ? Math.round(((totalFleet - disconnectedCount) / totalFleet) * 100)
       : 100;
 
-  const scaleOptions: FleetScale[] = [3, 100];
+  const scaleOptions: FleetScale[] = [4, 100];
 
   return (
     <div className="space-y-2.5">
@@ -135,7 +136,7 @@ export const BentoStatusRail: React.FC = () => {
                     : "text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]"
                 }`}
               >
-                {s === 3 ? "3 (Standard)" : `${s} Units`}
+                {s === 4 ? "4 (Standard)" : `${s} Units`}
               </button>
             ))}
           </div>
@@ -195,7 +196,7 @@ export const BentoStatusRail: React.FC = () => {
               </span>
             </div>
             <span className="text-[11px] font-mono font-semibold text-[#0071E3] dark:text-[#2997FF]">
-              {fleetScale > 3 ? "High-Scale" : "100% Online"}
+              {fleetScale > 4 ? "High-Scale" : "100% Online"}
             </span>
           </div>
         </div>
