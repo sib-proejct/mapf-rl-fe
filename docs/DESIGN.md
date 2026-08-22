@@ -1,6 +1,6 @@
 # MAPF-RL FE 설계서
 
-> - 상태: Phase 0 contract consumer 기준선 v0.2
+> - 상태: Phase 1 Read-only Operations vertical slice 완료 v0.3
 > - 대상 저장소: `mapf-rl-fe`
 > - 기준일: 2026-08-22
 > - 상위 기준: [`../../mapf-rl-docs/ARCHITECTURE.md`](../../mapf-rl-docs/ARCHITECTURE.md)
@@ -14,9 +14,7 @@
 
 이 문서는 시스템 아키텍처가 정한 FE 책임을 구현 가능한 제품·화면·상태·통신 구조로 구체화한다. `search-only-good-stock-fe`의 Apple식 시각 언어와 Vite 기반 React 구조를 그대로 계승하면서, MAPF 운영에 필요한 map·robot·Order·event·policy workflow와 실시간 복구 규칙을 정의한다.
 
-현재 저장소에는 TypeScript contract consumer, `package.json`, lockfile과 drift test만 있다. React/Vite
-application과 화면 runtime은 아직 없다. Core canonical endpoint와 wire field는 확정됐지만 구현된
-화면이나 연결로 표현하지 않는다.
+현재 저장소에는 Vite 6 + React 18 기반의 Read-only Operations vertical slice(authoritative snapshot 조회, static map 렌더링, robot/order inspector, list alternative, fixture/live API 전환, i18n/theme 토글), TypeScript contract consumer 및 단위/어댑터 테스트 스위트가 구축되어 있다.
 
 판단 표시는 다음과 같다.
 
@@ -803,16 +801,14 @@ Browser reload나 process restart 후 operational state를 local persistence에�
 
 ### 18.3 Validation command
 
-Scaffold 후 `package.json`에 실제 script가 존재하는 경우 다음 순서로 수행한다.
+현재 구성된 검증 스크립트는 다음과 같으며, commit 준비 및 검증 시 순서대로 수행한다.
 
-1. Formatter check
-2. Type check
-3. ESLint
-4. Focused unit/contract/integration test
-5. Production build
+1. Formatter check: `npm run format:check` (수정 시 `npm run format`)
+2. Type check: `npm run typecheck`
+3. Contract check: `npm run contracts:check`
+4. Focused unit/contract/integration test: `npm test`
+5. Production build: `npm run build`
 6. Representative viewport와 large-fleet visual/performance inspection
-
-현재 `package.json`, lockfile과 test runner가 없으므로 구체 command를 발명하거나 실행 성공으로 보고하지 않는다.
 
 ## 19. Build, 배포와 contract rollout
 
@@ -844,14 +840,14 @@ FE rollback은 Core가 유지한 previous major contract와 generated consumer r
 - [x] TypeScript/npm contract consumer scaffold와 실제 validation script
 - [x] Core OpenAPI/JSON Schema generated consumer, lock과 fixture pipeline
 - [x] OIDC BFF/HttpOnly-cookie WS auth ADR과 no-secret public config template
-- [ ] Vite/React/Tailwind와 visual foundation은 production dependency 승인 뒤 read-only slice와 함께 추가
+- [x] Vite/React/Tailwind와 visual foundation (Phase 1과 함께 구축 완료)
 
 ### Phase 1 — Read-only Operations vertical slice
 
-- Authoritative map/robot/Order snapshot
-- Static map + selected robot inspector
-- current/stale/partial/disconnected 상태
-- Coordinate/unit/time utility와 accessibility list alternative
+- [x] Authoritative map/robot/Order snapshot
+- [x] Static map + selected robot inspector
+- [x] current/stale/partial/disconnected 상태
+- [x] Coordinate/unit/time utility와 accessibility list alternative
 
 ### Phase 2 — Realtime reconciliation
 
