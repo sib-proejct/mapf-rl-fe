@@ -8,6 +8,9 @@
 
 ## Engineering rules
 
+- Prefer the simplest design that satisfies the current requirements. Do not add speculative abstractions, extension points, configuration, or layers without a concrete use case.
+- Handle errors at meaningful boundaries and where recovery or useful context is possible. Avoid broad, redundant, or defensive exception handling that hides programming errors or complicates the normal control flow.
+- Optimize code for readability and concision. Use direct control flow, clear names, and small focused units; avoid cleverness, unnecessary indirection, and duplicated ceremony.
 - Keep transport and schema adaptation at the API boundary. Use typed domain/view models inside the UI and validate untrusted server payloads where tooling permits.
 - Centralize REST base paths, WebSocket lifecycle, authentication, retries, and error normalization rather than duplicating them across components.
 - Reconnection must tolerate duplicate, delayed, and out-of-order messages. Reconcile snapshots and events using stable IDs and versions instead of arrival order alone.
@@ -29,14 +32,14 @@
 - Test API adapters, reducers/state transitions, coordinate conversions, reconnection behavior, and critical operator workflows.
 - Include duplicate events, stale `orderUpdateId`, connection loss, partial snapshots, and large robot counts in relevant tests.
 - Discover package manager and commands from the lockfile and `package.json`; do not switch package managers or invent scripts.
-- Run available type checking, linting, focused tests, and production build after relevant changes. For visible changes, inspect the rendered UI at representative viewport sizes.
+- **Do not run type checking (`typecheck`), tests (`test`), or build commands after every intermediate file change.** Run type checking and tests ONLY during the commit preparation stage or when explicitly requested by the user.
 - Until the application is scaffolded, document which checks are unavailable instead of claiming success.
 
 ## Commit workflow
 
 - Before staging a React or TypeScript change, run the configured formatter in check mode. Once Prettier is configured, use `prettier . --check`; use `prettier . --write` to apply formatting, then re-run the check. Also run the configured ESLint command when practical.
+- Run type checking (`npm run typecheck`) and relevant tests (`npm test`) only during this commit workflow before proposing the commit to the user.
 - Check the changes before proposing a commit, and split unrelated changes into separate commits.
-- Run relevant validation when practical, beginning with the narrowest checks.
 - Propose the exact files and commit message to the user, then obtain confirmation before committing.
 - Commit only the files explicitly approved by the user.
 
