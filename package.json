@@ -1,0 +1,17 @@
+{
+  "name": "mapf-rl-fe",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format:check": "prettier . --check",
+    "format": "prettier . --write",
+    "typecheck": "tsc --noEmit",
+    "contracts:check": "node scripts/check-contracts.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "prettier": "~3.4.2",
+    "typescript": "~5.7.3"
+  }
+}
