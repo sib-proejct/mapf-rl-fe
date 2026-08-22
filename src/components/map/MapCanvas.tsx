@@ -835,6 +835,10 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
                   );
                 }
 
+                const cellMin = Math.min(cellW, cellH);
+                const isCompact = cellMin < 22;
+                const pad = Math.max(1, cellMin * 0.08);
+
                 // --- B. CHARGERS (충전소 ⚡) ---
                 if (node.type === "charger") {
                   return (
@@ -847,43 +851,33 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
                       }}
                     >
                       <rect
-                        x={x + 2}
-                        y={y + 2}
-                        width={cellW - 4}
-                        height={cellH - 4}
-                        rx="6"
+                        x={x + pad}
+                        y={y + pad}
+                        width={cellW - pad * 2}
+                        height={cellH - pad * 2}
+                        rx={Math.min(6, cellMin * 0.25)}
                         fill="rgba(245, 158, 11, 0.12)"
                         stroke="#F59E0B"
-                        strokeWidth="1.2"
+                        strokeWidth={isCompact ? "1" : "1.2"}
                         strokeDasharray="4,2"
                       />
                       <circle
                         cx={cx}
                         cy={cy}
-                        r="9"
+                        r={cellMin * 0.32}
                         fill="#F59E0B"
                         fillOpacity="0.25"
                       />
                       <path
-                        d={`M ${cx + 1} ${cy - 5} L ${cx - 3} ${cy + 1} L ${cx} ${cy + 1} L ${cx - 1} ${cy + 5} L ${cx + 3} ${cy - 1} L ${cx} ${cy - 1} Z`}
+                        d={`M ${cx + 0.8} ${cy - cellMin * 0.18} L ${cx - cellMin * 0.1} ${cy + 0.5} L ${cx} ${cy + 0.5} L ${cx - 0.8} ${cy + cellMin * 0.18} L ${cx + cellMin * 0.1} ${cy - 0.5} L ${cx} ${cy - 0.5} Z`}
                         fill="#F59E0B"
                       />
-                      {showLabels && (
-                        <text
-                          x={cx}
-                          y={y + cellH - 3}
-                          textAnchor="middle"
-                          className="fill-amber-600 dark:fill-amber-400 text-[7.5px] font-mono font-bold select-none"
-                        >
-                          CHG
-                        </text>
-                      )}
                     </g>
                   );
                 }
 
-                // --- C. WORKSTATIONS (WS - Pick 📦) ---
-                if (node.type === "workstation") {
+                // --- C. PICK NODES (Pick 지점 📦) ---
+                if (node.type === "pick") {
                   return (
                     <g
                       key={`node-${node.id}`}
@@ -894,45 +888,79 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
                       }}
                     >
                       <rect
-                        x={x + 2}
-                        y={y + 2}
-                        width={cellW - 4}
-                        height={cellH - 4}
-                        rx="6"
-                        fill="rgba(6, 182, 212, 0.12)"
-                        stroke="#06B6D4"
-                        strokeWidth="1.2"
+                        x={x + pad}
+                        y={y + pad}
+                        width={cellW - pad * 2}
+                        height={cellH - pad * 2}
+                        rx={Math.min(6, cellMin * 0.25)}
+                        fill="rgba(245, 158, 11, 0.12)"
+                        stroke="#F59E0B"
+                        strokeWidth={isCompact ? "1" : "1.2"}
                       />
                       <circle
                         cx={cx}
                         cy={cy}
-                        r="10"
+                        r={cellMin * 0.32}
+                        fill="#F59E0B"
+                        fillOpacity="0.25"
+                      />
+                      <text
+                        x={cx}
+                        y={cy + (isCompact ? 1.5 : 2.5)}
+                        textAnchor="middle"
+                        className={`fill-amber-600 dark:fill-amber-400 font-mono font-black tracking-tight select-none ${
+                          isCompact ? "text-[5.5px]" : "text-[7px]"
+                        }`}
+                      >
+                        {isCompact ? "PK" : "PICK"}
+                      </text>
+                    </g>
+                  );
+                }
+
+                // --- D. PLACE STATIONS (Place 스테이션 📥) ---
+                if (node.type === "place" || node.type === "workstation") {
+                  return (
+                    <g
+                      key={`node-${node.id}`}
+                      className="cursor-pointer group"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedNodeId(node.id);
+                      }}
+                    >
+                      <rect
+                        x={x + pad}
+                        y={y + pad}
+                        width={cellW - pad * 2}
+                        height={cellH - pad * 2}
+                        rx={Math.min(6, cellMin * 0.25)}
+                        fill="rgba(6, 182, 212, 0.12)"
+                        stroke="#06B6D4"
+                        strokeWidth={isCompact ? "1" : "1.2"}
+                      />
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={cellMin * 0.32}
                         fill="#06B6D4"
                         fillOpacity="0.2"
                       />
                       <text
                         x={cx}
-                        y={cy + 2.5}
+                        y={cy + (isCompact ? 1.5 : 2.5)}
                         textAnchor="middle"
-                        className="fill-cyan-600 dark:fill-cyan-400 text-[8px] font-mono font-black tracking-tight select-none"
+                        className={`fill-cyan-600 dark:fill-cyan-400 font-mono font-black tracking-tight select-none ${
+                          isCompact ? "text-[5.5px]" : "text-[8px]"
+                        }`}
                       >
-                        PICK
+                        {isCompact ? "PL" : "PLACE"}
                       </text>
-                      {showLabels && (
-                        <text
-                          x={cx}
-                          y={y + cellH - 3}
-                          textAnchor="middle"
-                          className="fill-cyan-600 dark:fill-cyan-400 text-[7.5px] font-mono font-bold select-none"
-                        >
-                          WS-0{Math.floor(node.column / 4) + 1}
-                        </text>
-                      )}
                     </g>
                   );
                 }
 
-                // --- D. CHUTES (Place 📥) ---
+                // --- E. CHUTES (Place 📥) ---
                 if (node.type === "chute") {
                   return (
                     <g
@@ -944,40 +972,32 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
                       }}
                     >
                       <rect
-                        x={x + 2}
-                        y={y + 2}
-                        width={cellW - 4}
-                        height={cellH - 4}
-                        rx="6"
+                        x={x + pad}
+                        y={y + pad}
+                        width={cellW - pad * 2}
+                        height={cellH - pad * 2}
+                        rx={Math.min(6, cellMin * 0.25)}
                         fill="rgba(16, 185, 129, 0.12)"
                         stroke="#10B981"
-                        strokeWidth="1.2"
+                        strokeWidth={isCompact ? "1" : "1.2"}
                       />
                       <circle
                         cx={cx}
                         cy={cy}
-                        r="10"
+                        r={cellMin * 0.32}
                         fill="#10B981"
                         fillOpacity="0.2"
                       />
                       <text
                         x={cx}
-                        y={cy + 2.5}
+                        y={cy + (isCompact ? 1.5 : 2.5)}
                         textAnchor="middle"
-                        className="fill-emerald-600 dark:fill-emerald-400 text-[7px] font-mono font-black tracking-tight select-none"
+                        className={`fill-emerald-600 dark:fill-emerald-400 font-mono font-black tracking-tight select-none ${
+                          isCompact ? "text-[5.5px]" : "text-[7px]"
+                        }`}
                       >
-                        PLACE
+                        {isCompact ? "CH" : "CHUTE"}
                       </text>
-                      {showLabels && (
-                        <text
-                          x={cx}
-                          y={y + cellH - 3}
-                          textAnchor="middle"
-                          className="fill-emerald-600 dark:fill-emerald-400 text-[7.5px] font-mono font-bold select-none"
-                        >
-                          CHUTE
-                        </text>
-                      )}
                     </g>
                   );
                 }
@@ -994,28 +1014,30 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
                       }}
                     >
                       <rect
-                        x={x + 2}
-                        y={y + 2}
-                        width={cellW - 4}
-                        height={cellH - 4}
-                        rx="6"
+                        x={x + pad}
+                        y={y + pad}
+                        width={cellW - pad * 2}
+                        height={cellH - pad * 2}
+                        rx={Math.min(6, cellMin * 0.25)}
                         fill="rgba(139, 92, 246, 0.12)"
                         stroke="#8B5CF6"
-                        strokeWidth="1.2"
+                        strokeWidth={isCompact ? "0.9" : "1.2"}
                         strokeDasharray="3,2"
                       />
                       <circle
                         cx={cx}
                         cy={cy}
-                        r="8.5"
+                        r={cellMin * 0.3}
                         fill="#8B5CF6"
                         fillOpacity="0.25"
                       />
                       <text
                         x={cx}
-                        y={cy + 3.5}
+                        y={cy + (isCompact ? 2 : 3.5)}
                         textAnchor="middle"
-                        className="fill-purple-600 dark:fill-purple-400 text-[10px] font-bold select-none"
+                        className={`fill-purple-600 dark:fill-purple-400 font-bold select-none ${
+                          isCompact ? "text-[6.5px]" : "text-[10px]"
+                        }`}
                       >
                         P
                       </text>
@@ -1026,7 +1048,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
                 // --- F. STORAGE RACKS (보관 랙 / Storage Pod 📦) ---
                 if (node.type === "rack") {
                   const rackTag =
-                    node.name.match(/Rack ([A-G]-\d{2})/)?.[1] ||
+                    node.name.match(/Rack ([A-O]-\d{2})/)?.[1] ||
                     node.name.split(" ")[0];
                   return (
                     <g
@@ -1038,39 +1060,30 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
                       }}
                     >
                       <rect
-                        x={x + 2}
-                        y={y + 2}
-                        width={cellW - 4}
-                        height={cellH - 4}
-                        rx="4"
+                        x={x + pad}
+                        y={y + pad}
+                        width={cellW - pad * 2}
+                        height={cellH - pad * 2}
+                        rx={Math.min(4, cellMin * 0.2)}
                         fill="rgba(99, 102, 241, 0.15)"
                         stroke="#6366F1"
-                        strokeWidth="1.2"
                       />
                       <line
-                        x1={x + 3}
+                        x1={x + pad + 1}
                         y1={y + cellH * 0.35}
-                        x2={x + cellW - 3}
+                        x2={x + cellW - pad - 1}
                         y2={y + cellH * 0.35}
                         stroke="rgba(99, 102, 241, 0.35)"
                         strokeWidth="0.8"
                       />
                       <line
-                        x1={x + 3}
+                        x1={x + pad + 1}
                         y1={y + cellH * 0.65}
-                        x2={x + cellW - 3}
+                        x2={x + cellW - pad - 1}
                         y2={y + cellH * 0.65}
                         stroke="rgba(99, 102, 241, 0.35)"
                         strokeWidth="0.8"
                       />
-                      <text
-                        x={cx}
-                        y={cy + cellH * 0.32}
-                        textAnchor="middle"
-                        className="fill-indigo-600 dark:fill-indigo-300 text-[6.5px] font-mono font-bold select-none"
-                      >
-                        {rackTag}
-                      </text>
                     </g>
                   );
                 }
@@ -1243,6 +1256,23 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
                     ? "#30D158"
                     : "#0071E3";
 
+              const cellW = baseWidth / widthCells;
+              const cellH = baseHeight / heightCells;
+              const cellMin = Math.min(cellW, cellH);
+              const isCompactFleet = cellMin < 22;
+
+              const robotRadius = cellMin * 0.38;
+              const haloRadius = robotRadius * 1.6;
+              const arrowTip = robotRadius * 0.72;
+              const arrowBase = robotRadius * 0.36;
+
+              const shouldShowLabel =
+                isSelected || (showLabels && (!isCompactFleet || zoom >= 1.2));
+              const displayId =
+                isCompactFleet && !isSelected
+                  ? robot.id.replace("robot-", "")
+                  : robot.id;
+
               return (
                 <g
                   key={`robot-${robot.id}`}
@@ -1258,53 +1288,64 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
                     <circle
                       cx="0"
                       cy="0"
-                      r="20"
+                      r={haloRadius}
                       fill="rgba(0, 113, 227, 0.2)"
                       stroke="#0071E3"
-                      strokeWidth="2"
+                      strokeWidth={Math.max(1.5, robotRadius * 0.2)}
                     />
                   )}
 
                   <circle
                     cx="0"
                     cy="0"
-                    r="13"
+                    r={robotRadius}
                     stroke={robotColor}
-                    strokeWidth={isSelected ? "3" : "2.5"}
+                    strokeWidth={
+                      isSelected
+                        ? Math.max(2.0, robotRadius * 0.25)
+                        : Math.max(1.2, robotRadius * 0.18)
+                    }
                     className="fill-white dark:fill-[#1C1C1E] shadow-md transition-colors duration-200"
                   />
 
                   <g transform={`rotate(${rotationDeg})`}>
                     <polygon
-                      points="9,0 0,-4.5 2.5,0 0,4.5"
+                      points={`${arrowTip},0 0,-${arrowBase} ${arrowTip * 0.25},0 0,${arrowBase}`}
                       fill={robotColor}
                     />
                   </g>
 
-                  <circle cx="0" cy="0" r="3.5" fill={robotColor} />
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r={Math.max(1.2, robotRadius * 0.25)}
+                    fill={robotColor}
+                  />
 
-                  {showLabels && (
-                    <g transform="translate(0, 22)">
+                  {shouldShowLabel && (
+                    <g
+                      transform={`translate(0, ${robotRadius + (isCompactFleet ? 3 : 5)})`}
+                    >
                       <rect
-                        x="-26"
-                        y="-8"
-                        width="52"
-                        height="16"
-                        rx="5"
+                        x={isCompactFleet ? -14 : -22}
+                        y={isCompactFleet ? -5 : -6}
+                        width={isCompactFleet ? 28 : 44}
+                        height={isCompactFleet ? 10 : 13}
+                        rx={isCompactFleet ? 2.5 : 3.5}
                         className="fill-white/95 dark:fill-[#1C1C1E]/95 stroke-black/[0.08] dark:stroke-white/[0.12]"
                         strokeWidth="0.75"
                       />
                       <text
                         x="0"
-                        y="4"
+                        y={isCompactFleet ? 2.5 : 3}
                         textAnchor="middle"
-                        className={`text-[9px] font-mono font-bold select-none ${
+                        className={`${isCompactFleet ? "text-[6.5px]" : "text-[8px]"} font-mono font-bold select-none ${
                           isSelected
                             ? "fill-[#0071E3] dark:fill-[#2997FF] font-extrabold"
                             : "fill-[#1D1D1F] dark:fill-[#F5F5F7]"
                         }`}
                       >
-                        {robot.id}
+                        {displayId}
                       </text>
                     </g>
                   )}

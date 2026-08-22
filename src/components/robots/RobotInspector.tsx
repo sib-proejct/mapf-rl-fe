@@ -138,14 +138,18 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
                 {selectedNode.type === "pillar" && (
                   <ShieldAlert className="w-4 h-4 text-zinc-500" />
                 )}
+                {selectedNode.type === "pick" && (
+                  <Package className="w-4 h-4 text-amber-500" />
+                )}
+                {(selectedNode.type === "place" ||
+                  selectedNode.type === "workstation") && (
+                  <Inbox className="w-4 h-4 text-cyan-500" />
+                )}
                 {selectedNode.type === "buffer" && (
                   <PauseCircle className="w-4 h-4 text-purple-500" />
                 )}
                 {selectedNode.type === "chute" && (
                   <Inbox className="w-4 h-4 text-emerald-500" />
-                )}
-                {selectedNode.type === "workstation" && (
-                  <Package className="w-4 h-4 text-cyan-500" />
                 )}
                 {selectedNode.type === "waypoint" && (
                   <MapPin className="w-4 h-4 text-[#0071E3] dark:text-[#2997FF]" />

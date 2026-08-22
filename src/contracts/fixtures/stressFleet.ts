@@ -23,36 +23,49 @@ export function generateStressSnapshot(
   const resolution = baseMap.resolutionMeters;
   const origin = baseMap.origin;
 
-  // Find all traversable cells
-  const traversableCells: Array<{ col: number; row: number }> = [];
-  for (let r = 0; r < heightCells; r++) {
-    for (let c = 0; c < widthCells; c++) {
-      const idx = r * widthCells + c;
-      if (baseMap.cells[idx] === 0) {
-        traversableCells.push({ col: c, row: r });
-      }
-    }
-  }
+  const topology = deriveMapTopology(baseMap);
+
+  // Find all traversable nodes
+  const traversableNodes = topology.nodes.filter((n) => n.isTraversable);
+  const placeNodes = topology.nodes.filter(
+    (n) => n.isTraversable && n.type === "place",
+  );
+  const pickNodes = topology.nodes.filter(
+    (n) => n.isTraversable && n.type === "pick",
+  );
+  const chargerNodes = topology.nodes.filter(
+    (n) => n.isTraversable && n.type === "charger",
+  );
+  const highwayNodes = topology.nodes.filter(
+    (n) =>
+      n.isTraversable &&
+      (n.zone?.includes("Highway") || n.zone?.includes("Crossway")),
+  );
 
   const robots: Robot[] = [];
   const orders: Order[] = [];
 
   for (let i = 0; i < count; i++) {
     const id = `robot-${String(i + 1).padStart(3, "0")}`;
-    const cell = traversableCells[i % traversableCells.length] || {
-      col: i % widthCells,
-      row: Math.floor(i / widthCells) % heightCells,
-    };
+
+    // Stagger placement across highways, aisles, and chargers
+    let spawnNode = traversableNodes[(i * 13) % traversableNodes.length];
+    if (i < chargerNodes.length) {
+      spawnNode = chargerNodes[i];
+    } else if (highwayNodes.length > 0 && i % 3 === 0) {
+      spawnNode = highwayNodes[(i * 5) % highwayNodes.length];
+    }
 
     const baseWorld = cellToWorld(
-      { column: cell.col, row: cell.row },
+      { column: spawnNode.column, row: spawnNode.row },
       resolution,
       origin,
     );
 
     const xMeters = baseWorld.x;
     const yMeters = baseWorld.y;
-    const yawRadians = cell.col % 2 === 0 ? Math.PI / 2 : (3 * Math.PI) / 2;
+    const yawRadians =
+      spawnNode.column % 2 === 0 ? Math.PI / 2 : (3 * Math.PI) / 2;
 
     let state: RobotOperationalState = "EXECUTING";
     let connectivity: "CONNECTED" | "DISCONNECTED" = "CONNECTED";
@@ -98,14 +111,26 @@ export function generateStressSnapshot(
     });
 
     if (orderId) {
-      const isPickStationGoal = i % 2 === 0;
-      const stationCols = [3, 8, 13, 18, 23, 28];
-      const goalCol = isPickStationGoal
-        ? stationCols[i % stationCols.length]
-        : (cell.col + 3) % widthCells;
-      const goalRow = isPickStationGoal
-        ? 0
-        : ((cell.row + 4) % (heightCells - 8)) + 4;
+      const isPlaceGoal = i % 3 === 0;
+      const isPickGoal = i % 3 === 1;
+      let goalCol: number;
+      let goalRow: number;
+
+      if (isPlaceGoal && placeNodes.length > 0) {
+        const pNode = placeNodes[i % placeNodes.length];
+        goalCol = pNode.column;
+        goalRow = pNode.row;
+      } else if (isPickGoal && pickNodes.length > 0) {
+        const pkNode = pickNodes[(i * 7) % pickNodes.length];
+        goalCol = pkNode.column;
+        goalRow = pkNode.row;
+      } else {
+        const randomTraversable =
+          traversableNodes[(i * 11) % traversableNodes.length] || spawnNode;
+        goalCol = randomTraversable.column;
+        goalRow = randomTraversable.row;
+      }
+
       orders.push({
         id: orderId,
         orderUpdateId: 0,

@@ -20,15 +20,12 @@ import {
   Network,
   Table,
   Search,
-  Zap,
-  ShieldAlert,
-  PauseCircle,
-  Inbox,
-  Package,
   Boxes,
-  MapPin,
   ArrowRight,
   ArrowLeftRight,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 
 export interface AccessibleMapListProps {
@@ -39,6 +36,92 @@ export interface AccessibleMapListProps {
 }
 
 export type TableTab = "robots" | "nodes" | "edges";
+export type SortDirection = "asc" | "desc";
+
+export type RobotSortKey =
+  | "id"
+  | "pose"
+  | "cell"
+  | "state"
+  | "connectivity"
+  | "safety"
+  | "order";
+
+export type NodeSortKey =
+  | "id"
+  | "type"
+  | "name"
+  | "cell"
+  | "pose"
+  | "edges"
+  | "status";
+
+export type EdgeSortKey =
+  | "id"
+  | "from"
+  | "direction"
+  | "to"
+  | "type"
+  | "weight";
+
+interface SortableHeaderProps<T extends string> {
+  sortKey: T;
+  currentSortKey: T;
+  sortDirection: SortDirection;
+  onSort: (key: T) => void;
+  className?: string;
+  align?: "left" | "right" | "center";
+  children: React.ReactNode;
+}
+
+function SortableHeader<T extends string>({
+  sortKey,
+  currentSortKey,
+  sortDirection,
+  onSort,
+  className = "",
+  align = "left",
+  children,
+}: SortableHeaderProps<T>) {
+  const isActive = currentSortKey === sortKey;
+  const ariaSort = isActive
+    ? sortDirection === "asc"
+      ? "ascending"
+      : "descending"
+    : "none";
+
+  return (
+    <th
+      scope="col"
+      aria-sort={ariaSort}
+      onClick={() => onSort(sortKey)}
+      className={`py-2.5 px-3 select-none cursor-pointer transition-colors group/th hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] ${
+        isActive
+          ? "text-[#0071E3] dark:text-[#2997FF] font-semibold"
+          : "text-[#86868B]"
+      } ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${className}`}
+    >
+      <div
+        className={`inline-flex items-center gap-1 ${
+          align === "right" ? "justify-end flex-row-reverse" : "justify-start"
+        }`}
+      >
+        <span>{children}</span>
+        <span className="shrink-0 transition-opacity">
+          {isActive ? (
+            sortDirection === "asc" ? (
+              <ArrowUp className="w-3.5 h-3.5 text-[#0071E3] dark:text-[#2997FF]" />
+            ) : (
+              <ArrowDown className="w-3.5 h-3.5 text-[#0071E3] dark:text-[#2997FF]" />
+            )
+          ) : (
+            <ArrowUpDown className="w-3 h-3 text-black/20 dark:text-white/20 opacity-0 group-hover/th:opacity-100" />
+          )}
+        </span>
+      </div>
+    </th>
+  );
+}
 
 export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
   viewMode = "accessible",
@@ -59,6 +142,43 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
   const [activeTab, setActiveTab] = useState<TableTab>("robots");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [nodeTypeFilter, setNodeTypeFilter] = useState<string>("ALL");
+
+  // Sorting state for each tab
+  const [robotSortKey, setRobotSortKey] = useState<RobotSortKey>("id");
+  const [robotSortDir, setRobotSortDir] = useState<SortDirection>("asc");
+
+  const [nodeSortKey, setNodeSortKey] = useState<NodeSortKey>("id");
+  const [nodeSortDir, setNodeSortDir] = useState<SortDirection>("asc");
+
+  const [edgeSortKey, setEdgeSortKey] = useState<EdgeSortKey>("id");
+  const [edgeSortDir, setEdgeSortDir] = useState<SortDirection>("asc");
+
+  const handleRobotSort = (key: RobotSortKey) => {
+    if (robotSortKey === key) {
+      setRobotSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setRobotSortKey(key);
+      setRobotSortDir("asc");
+    }
+  };
+
+  const handleNodeSort = (key: NodeSortKey) => {
+    if (nodeSortKey === key) {
+      setNodeSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setNodeSortKey(key);
+      setNodeSortDir("asc");
+    }
+  };
+
+  const handleEdgeSort = (key: EdgeSortKey) => {
+    if (edgeSortKey === key) {
+      setEdgeSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setEdgeSortKey(key);
+      setEdgeSortDir("asc");
+    }
+  };
 
   const map = snapshot?.map;
   const robots = useMemo(() => snapshot?.robots || [], [snapshot?.robots]);
@@ -91,21 +211,85 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
     return topology.nodes.filter((n) => n.type === "rack");
   }, [topology]);
 
-  // Filtered Robots
-  const filteredRobots = useMemo(() => {
-    if (!searchQuery.trim()) return robots;
-    const q = searchQuery.toLowerCase().trim();
-    return robots.filter(
-      (r) =>
-        r.id.toLowerCase().includes(q) ||
-        r.operationalState.toLowerCase().includes(q) ||
-        r.connectivity.toLowerCase().includes(q) ||
-        r.safety.toLowerCase().includes(q),
-    );
-  }, [robots, searchQuery]);
+  // Filtered and Sorted Robots
+  const filteredAndSortedRobots = useMemo(() => {
+    let list = robots;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (r) =>
+          r.id.toLowerCase().includes(q) ||
+          r.operationalState.toLowerCase().includes(q) ||
+          r.connectivity.toLowerCase().includes(q) ||
+          r.safety.toLowerCase().includes(q),
+      );
+    }
 
-  // Filtered Nodes
-  const filteredNodes = useMemo(() => {
+    return [...list].sort((a, b) => {
+      let comparison = 0;
+      switch (robotSortKey) {
+        case "id":
+          comparison = a.id.localeCompare(b.id, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+          break;
+        case "pose":
+          comparison =
+            a.pose.xMeters === b.pose.xMeters
+              ? a.pose.yMeters - b.pose.yMeters
+              : a.pose.xMeters - b.pose.xMeters;
+          break;
+        case "cell": {
+          const cellA = worldToCell(
+            { x: a.pose.xMeters, y: a.pose.yMeters },
+            resolution,
+            origin,
+          );
+          const cellB = worldToCell(
+            { x: b.pose.xMeters, y: b.pose.yMeters },
+            resolution,
+            origin,
+          );
+          const nodeA = cellToNodeId(cellA, widthCells);
+          const nodeB = cellToNodeId(cellB, widthCells);
+          comparison = nodeA - nodeB;
+          break;
+        }
+        case "state":
+          comparison = a.operationalState.localeCompare(b.operationalState);
+          break;
+        case "connectivity":
+          comparison = a.connectivity.localeCompare(b.connectivity);
+          break;
+        case "safety":
+          comparison = a.safety.localeCompare(b.safety);
+          break;
+        case "order": {
+          const orderA = a.currentOrderId || "";
+          const orderB = b.currentOrderId || "";
+          comparison = orderA.localeCompare(orderB, undefined, {
+            numeric: true,
+          });
+          break;
+        }
+        default:
+          comparison = 0;
+      }
+      return robotSortDir === "asc" ? comparison : -comparison;
+    });
+  }, [
+    robots,
+    searchQuery,
+    robotSortKey,
+    robotSortDir,
+    resolution,
+    origin,
+    widthCells,
+  ]);
+
+  // Filtered and Sorted Nodes
+  const filteredAndSortedNodes = useMemo(() => {
     if (!topology) return [];
     let list = topology.nodes;
 
@@ -124,11 +308,78 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
       );
     }
 
-    return list;
-  }, [topology, nodeTypeFilter, searchQuery]);
+    return [...list].sort((a, b) => {
+      let comparison = 0;
+      switch (nodeSortKey) {
+        case "id":
+          comparison = a.id - b.id;
+          break;
+        case "type":
+          comparison = a.type.localeCompare(b.type);
+          break;
+        case "name":
+          comparison = a.name.localeCompare(b.name, undefined, {
+            numeric: true,
+          });
+          break;
+        case "cell":
+          comparison =
+            a.column === b.column ? a.row - b.row : a.column - b.column;
+          break;
+        case "pose":
+          comparison =
+            a.xMeters === b.xMeters
+              ? a.yMeters - b.yMeters
+              : a.xMeters - b.xMeters;
+          break;
+        case "edges": {
+          const outgoingA = topology.nodeOutgoingEdges.get(a.id)?.length || 0;
+          const incomingA = topology.nodeIncomingEdges.get(a.id)?.length || 0;
+          const outgoingB = topology.nodeOutgoingEdges.get(b.id)?.length || 0;
+          const incomingB = topology.nodeIncomingEdges.get(b.id)?.length || 0;
+          comparison = outgoingA + incomingA - (outgoingB + incomingB);
+          break;
+        }
+        case "status": {
+          const isOccupiedA = robots.some((r) => {
+            const rc = worldToCell(
+              { x: r.pose.xMeters, y: r.pose.yMeters },
+              resolution,
+              origin,
+            );
+            return rc.column === a.column && rc.row === a.row;
+          });
+          const isOccupiedB = robots.some((r) => {
+            const rc = worldToCell(
+              { x: r.pose.xMeters, y: r.pose.yMeters },
+              resolution,
+              origin,
+            );
+            return rc.column === b.column && rc.row === b.row;
+          });
+          const valA = isOccupiedA ? 2 : !a.isTraversable ? 1 : 0;
+          const valB = isOccupiedB ? 2 : !b.isTraversable ? 1 : 0;
+          comparison = valA - valB;
+          break;
+        }
+        default:
+          comparison = 0;
+      }
+      return nodeSortDir === "asc" ? comparison : -comparison;
+    });
+  }, [
+    topology,
+    nodeTypeFilter,
+    searchQuery,
+    nodeSortKey,
+    nodeSortDir,
+    robots,
+    resolution,
+    origin,
+  ]);
 
-  // Filtered Edges
-  const filteredEdges = useMemo(() => {
+  // Filtered and Sorted Edges
+  const filteredAndSortedEdges = useMemo(() => {
     if (!topology) return [];
     let list = topology.edges;
 
@@ -143,8 +394,33 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
       );
     }
 
-    return list;
-  }, [topology, searchQuery]);
+    return [...list].sort((a, b) => {
+      let comparison = 0;
+      switch (edgeSortKey) {
+        case "id":
+          comparison = a.id.localeCompare(b.id, undefined, { numeric: true });
+          break;
+        case "from":
+          comparison = a.fromNodeId - b.fromNodeId;
+          break;
+        case "direction":
+          comparison = a.direction.localeCompare(b.direction);
+          break;
+        case "to":
+          comparison = a.toNodeId - b.toNodeId;
+          break;
+        case "type":
+          comparison = a.type.localeCompare(b.type);
+          break;
+        case "weight":
+          comparison = a.weightMeters - b.weightMeters;
+          break;
+        default:
+          comparison = 0;
+      }
+      return edgeSortDir === "asc" ? comparison : -comparison;
+    });
+  }, [topology, searchQuery, edgeSortKey, edgeSortDir]);
 
   return (
     <section
@@ -253,48 +529,57 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                   : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
               }`}
             >
-              <Network className="w-3.5 h-3.5" />
+              <ArrowLeftRight className="w-3.5 h-3.5" />
               <span>
                 {t("a11yTabEdges")} ({topology?.edges.length || 0})
               </span>
             </button>
           </div>
 
-          {headerRight && (
-            <>
-              <div className="h-4 w-[1px] bg-black/10 dark:bg-white/15 mx-1" />
-              {headerRight}
-            </>
-          )}
+          {headerRight}
         </div>
       </div>
 
-      {/* 2. Interactive Search & Category Filter Subheader */}
-      <div className="px-4 py-2 bg-[#FBFBFD] dark:bg-[#161618] border-b border-black/[0.04] dark:border-white/[0.06] flex flex-wrap items-center justify-between gap-2.5">
-        {/* Search Input */}
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="w-3.5 h-3.5 text-[#86868B] absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
+      {/* 2. Secondary Filter & Search Bar */}
+      <div className="shrink-0 px-3 sm:px-4 py-2 border-b border-black/[0.05] dark:border-white/[0.06] bg-[#FBFBFD] dark:bg-[#161618] flex flex-wrap items-center justify-between gap-2.5 text-xs">
+        {/* Search Filter Input */}
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B]" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t("a11ySearchPlaceholder")}
-            className="w-full pl-8 pr-3 py-1 text-xs rounded-xl bg-black/5 dark:bg-white/5 border border-black/[0.06] dark:border-white/[0.08] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder-[#86868B] focus:outline-none focus:ring-1 focus:ring-[#0071E3]"
+            placeholder={
+              activeTab === "robots"
+                ? t("a11ySearchRobotsPlaceholder")
+                : activeTab === "nodes"
+                  ? t("a11ySearchNodesPlaceholder")
+                  : t("a11ySearchEdgesPlaceholder")
+            }
+            className="w-full pl-8 pr-3 py-1 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder-[#86868B] focus:outline-hidden focus:border-[#0071E3] dark:focus:border-[#2997FF] text-xs transition-colors"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
-        {/* Filter Pills for Nodes tab */}
+        {/* Node Sub-Type Filter Tags (Only for Nodes tab) */}
         {activeTab === "nodes" && (
-          <div className="flex items-center gap-1 overflow-x-auto text-[11px]">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
             {[
-              { id: "ALL", label: t("a11yFilterAll") },
-              { id: "workstation", label: "Pick WS" },
-              { id: "chute", label: "Place Chute" },
+              { id: "ALL", label: t("a11yFilterAllNodes") },
+              { id: "pick", label: t("a11yFilterPick") },
+              { id: "drop", label: t("a11yFilterDrop") },
               { id: "rack", label: t("a11yFilterRacks") },
               { id: "charger", label: t("a11yFilterChargers") },
               { id: "buffer", label: t("a11yFilterBuffers") },
               { id: "pillar", label: t("a11yFilterPillars") },
-              { id: "waypoint", label: "Waypoints" },
+              { id: "waypoint", label: t("a11yFilterWaypoints") },
             ].map((filter) => (
               <button
                 key={filter.id}
@@ -318,34 +603,69 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-black/[0.05] dark:border-white/[0.06] font-medium text-[#86868B] bg-[#FBFBFD] dark:bg-[#161618] sticky top-0 z-10 whitespace-nowrap">
-                <th scope="col" className="py-2.5 px-3">
+                <SortableHeader
+                  sortKey="id"
+                  currentSortKey={robotSortKey}
+                  sortDirection={robotSortDir}
+                  onSort={handleRobotSort}
+                >
                   {t("a11yColRobotId")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="pose"
+                  currentSortKey={robotSortKey}
+                  sortDirection={robotSortDir}
+                  onSort={handleRobotSort}
+                >
                   {t("a11yColPose")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="cell"
+                  currentSortKey={robotSortKey}
+                  sortDirection={robotSortDir}
+                  onSort={handleRobotSort}
+                >
                   {t("a11yColCell")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="state"
+                  currentSortKey={robotSortKey}
+                  sortDirection={robotSortDir}
+                  onSort={handleRobotSort}
+                >
                   {t("a11yColState")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="connectivity"
+                  currentSortKey={robotSortKey}
+                  sortDirection={robotSortDir}
+                  onSort={handleRobotSort}
+                >
                   {t("a11yColConnectivity")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="safety"
+                  currentSortKey={robotSortKey}
+                  sortDirection={robotSortDir}
+                  onSort={handleRobotSort}
+                >
                   {t("a11yColSafety")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="order"
+                  currentSortKey={robotSortKey}
+                  sortDirection={robotSortDir}
+                  onSort={handleRobotSort}
+                >
                   {t("a11yColOrder")}
-                </th>
+                </SortableHeader>
                 <th scope="col" className="py-2.5 px-3 text-right">
                   {t("a11yColAction")}
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-              {filteredRobots.length === 0 ? (
+              {filteredAndSortedRobots.length === 0 ? (
                 <tr>
                   <td
                     colSpan={8}
@@ -355,7 +675,7 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredRobots.map((robot) => {
+                filteredAndSortedRobots.map((robot) => {
                   const isSelected = robot.id === selectedRobotId;
                   const cell = worldToCell(
                     { x: robot.pose.xMeters, y: robot.pose.yMeters },
@@ -442,53 +762,65 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                       {/* Connectivity */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 text-[11px]">
-                          {!isDisconnected ? (
-                            <Wifi className="w-3.5 h-3.5 text-[#34C759] dark:text-[#30D158]" />
+                          {isDisconnected ? (
+                            <>
+                              <WifiOff className="w-3.5 h-3.5 text-[#FF3B30] dark:text-[#FF453A]" />
+                              <span className="font-medium text-[#FF3B30] dark:text-[#FF453A]">
+                                Disconnected
+                              </span>
+                            </>
                           ) : (
-                            <WifiOff className="w-3.5 h-3.5 text-[#FF3B30] dark:text-[#FF453A]" />
+                            <>
+                              <Wifi className="w-3.5 h-3.5 text-[#34C759] dark:text-[#30D158]" />
+                              <span className="text-[#86868B]">Connected</span>
+                            </>
                           )}
-                          <span
-                            className={`font-semibold ${
-                              isDisconnected
-                                ? "text-[#FF3B30] dark:text-[#FF453A]"
-                                : "text-[#86868B]"
-                            }`}
-                          >
-                            {robot.connectivity}
-                          </span>
                         </div>
                       </td>
 
                       {/* Safety */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 text-[11px]">
-                          {robot.safety !== "NORMAL" &&
-                          robot.safety !== "WAIT" ? (
-                            <AlertTriangle className="w-3.5 h-3.5 text-[#FF9500] dark:text-[#FF9F0A]" />
-                          ) : null}
-                          <span
-                            className={`font-semibold ${
-                              robot.safety !== "NORMAL"
-                                ? "text-[#FF9500] dark:text-[#FF9F0A]"
-                                : "text-[#86868B]"
-                            }`}
-                          >
-                            {robot.safety}
+                        {robot.safety === "NORMAL" ? (
+                          <span className="text-[11px] font-semibold text-[#34C759] dark:text-[#30D158] bg-[#34C759]/10 px-2 py-0.5 rounded-full">
+                            Normal
                           </span>
-                        </div>
-                      </td>
-
-                      {/* Order & Goal */}
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-[#86868B] whitespace-nowrap">
-                        {assignedOrder ? (
-                          <span className="text-[#1D1D1F] dark:text-[#F5F5F7] font-semibold">
-                            {assignedOrder.id}{" "}
-                            {goal
-                              ? `→ (${goal.goalColumn}, ${goal.goalRow})`
-                              : ""}
+                        ) : robot.safety === "WAIT" ? (
+                          <span className="text-[11px] font-bold text-[#FF9500] dark:text-[#FF9F0A] bg-[#FF9500]/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" />
+                            Wait
                           </span>
                         ) : (
-                          <span className="text-[#86868B] font-normal">-</span>
+                          <span className="text-[11px] font-bold text-[#FF3B30] dark:text-[#FF453A] bg-[#FF3B30]/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" />
+                            {robot.safety}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Goal / Order */}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        {assignedOrder ? (
+                          <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                            <span className="font-semibold text-[#0071E3] dark:text-[#2997FF]">
+                              Order #{assignedOrder.id.slice(0, 8)}
+                            </span>
+                            {goal !== undefined && (
+                              <span className="text-[#86868B]">
+                                → Node{" "}
+                                {cellToNodeId(
+                                  {
+                                    column: goal.goalColumn,
+                                    row: goal.goalRow,
+                                  },
+                                  widthCells,
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[#86868B] italic text-[11px]">
+                            None
+                          </span>
                         )}
                       </td>
 
@@ -520,34 +852,69 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-black/[0.05] dark:border-white/[0.06] font-medium text-[#86868B] bg-[#FBFBFD] dark:bg-[#161618] sticky top-0 z-10 whitespace-nowrap">
-                <th scope="col" className="py-2.5 px-3">
+                <SortableHeader
+                  sortKey="id"
+                  currentSortKey={nodeSortKey}
+                  sortDirection={nodeSortDir}
+                  onSort={handleNodeSort}
+                >
                   {t("a11yColNodeId")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="type"
+                  currentSortKey={nodeSortKey}
+                  sortDirection={nodeSortDir}
+                  onSort={handleNodeSort}
+                >
                   {t("a11yColNodeType")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="name"
+                  currentSortKey={nodeSortKey}
+                  sortDirection={nodeSortDir}
+                  onSort={handleNodeSort}
+                >
                   {t("a11yColNodeName")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="cell"
+                  currentSortKey={nodeSortKey}
+                  sortDirection={nodeSortDir}
+                  onSort={handleNodeSort}
+                >
                   {t("a11yColCell")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="pose"
+                  currentSortKey={nodeSortKey}
+                  sortDirection={nodeSortDir}
+                  onSort={handleNodeSort}
+                >
                   {t("a11yColPose")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="edges"
+                  currentSortKey={nodeSortKey}
+                  sortDirection={nodeSortDir}
+                  onSort={handleNodeSort}
+                >
                   {t("a11yColConnectedEdges")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="status"
+                  currentSortKey={nodeSortKey}
+                  sortDirection={nodeSortDir}
+                  onSort={handleNodeSort}
+                >
                   {t("a11yColNodeStatus")}
-                </th>
+                </SortableHeader>
                 <th scope="col" className="py-2.5 px-3 text-right">
                   {t("a11yColAction")}
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-              {filteredNodes.length === 0 ? (
+              {filteredAndSortedNodes.length === 0 ? (
                 <tr>
                   <td
                     colSpan={8}
@@ -557,7 +924,7 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredNodes.map((node) => {
+                filteredAndSortedNodes.map((node) => {
                   const isSelected = selectedNodeId === node.id;
                   const uiMeta = getNodeTypeUiMeta(node.type);
                   const outgoing =
@@ -678,28 +1045,59 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-black/[0.05] dark:border-white/[0.06] font-medium text-[#86868B] bg-[#FBFBFD] dark:bg-[#161618] sticky top-0 z-10 whitespace-nowrap">
-                <th scope="col" className="py-2.5 px-3">
+                <SortableHeader
+                  sortKey="id"
+                  currentSortKey={edgeSortKey}
+                  sortDirection={edgeSortDir}
+                  onSort={handleEdgeSort}
+                >
                   {t("a11yColEdgeId")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="from"
+                  currentSortKey={edgeSortKey}
+                  sortDirection={edgeSortDir}
+                  onSort={handleEdgeSort}
+                >
                   {t("a11yColFromNode")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="direction"
+                  currentSortKey={edgeSortKey}
+                  sortDirection={edgeSortDir}
+                  onSort={handleEdgeSort}
+                >
                   {t("a11yColDirection")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="to"
+                  currentSortKey={edgeSortKey}
+                  sortDirection={edgeSortDir}
+                  onSort={handleEdgeSort}
+                >
                   {t("a11yColToNode")}
-                </th>
-                <th scope="col" className="py-2.5 px-3">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="type"
+                  currentSortKey={edgeSortKey}
+                  sortDirection={edgeSortDir}
+                  onSort={handleEdgeSort}
+                >
                   {t("a11yColEdgeType")}
-                </th>
-                <th scope="col" className="py-2.5 px-3 text-right">
+                </SortableHeader>
+                <SortableHeader
+                  sortKey="weight"
+                  currentSortKey={edgeSortKey}
+                  sortDirection={edgeSortDir}
+                  onSort={handleEdgeSort}
+                  align="right"
+                >
                   {t("a11yColWeight")}
-                </th>
+                </SortableHeader>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-              {filteredEdges.length === 0 ? (
+              {filteredAndSortedEdges.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -709,7 +1107,7 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredEdges.map((edge) => (
+                filteredAndSortedEdges.map((edge) => (
                   <tr
                     key={`a11y-edge-${edge.id}`}
                     className="hover:bg-[#F5F5F7]/80 dark:hover:bg-[#2C2C2E]/60 transition-colors"
@@ -778,10 +1176,10 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
         <div className="flex items-center gap-3">
           <span>
             {activeTab === "robots"
-              ? `${filteredRobots.length} robots listed`
+              ? `${filteredAndSortedRobots.length} robots listed`
               : activeTab === "nodes"
-                ? `${filteredNodes.length} nodes listed (${rackNodes.length} Racks, ${stationNodes.length} Stations)`
-                : `${filteredEdges.length} edges listed`}
+                ? `${filteredAndSortedNodes.length} nodes listed (${rackNodes.length} Racks, ${stationNodes.length} Stations)`
+                : `${filteredAndSortedEdges.length} edges listed`}
           </span>
         </div>
         <span className="font-mono text-[11px] tabular-nums text-[#86868B]">

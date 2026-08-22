@@ -295,6 +295,10 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
     // 4. Specialized Station Nodes (Workstations, Chutes, Chargers, Buffers)
     if (topology) {
+      const cellMin = Math.min(cellW, cellH);
+      const isCompact = cellMin < 22;
+      const pad = Math.max(1, cellMin * 0.08);
+
       for (const node of topology.nodes) {
         if (node.type === "waypoint" || node.type === "pillar") continue;
 
@@ -305,15 +309,53 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
         bgCtx.save();
 
-        if (node.type === "workstation") {
-          // Cyan Workstation (G2P Pick Station)
+        if (node.type === "pick") {
+          // Amber / Gold Pick Point directly in front of rack
+          bgCtx.fillStyle = isDark
+            ? "rgba(245, 158, 11, 0.16)"
+            : "rgba(245, 158, 11, 0.12)";
+          bgCtx.beginPath();
+          bgCtx.roundRect(
+            x + pad,
+            y + pad,
+            cellW - pad * 2,
+            cellH - pad * 2,
+            Math.min(6, cellMin * 0.25),
+          );
+          bgCtx.fill();
+          bgCtx.lineWidth = isCompact ? 1.0 : 1.4;
+          bgCtx.strokeStyle = isDark ? "#FBBF24" : "#F59E0B";
+          bgCtx.stroke();
+
+          bgCtx.fillStyle = isDark
+            ? "rgba(245, 158, 11, 0.3)"
+            : "rgba(245, 158, 11, 0.2)";
+          bgCtx.beginPath();
+          bgCtx.arc(cx, cy, cellMin * 0.32, 0, Math.PI * 2);
+          bgCtx.fill();
+
+          bgCtx.fillStyle = isDark ? "#FBBF24" : "#D97706";
+          bgCtx.font = isCompact
+            ? "900 5.5px 'JetBrains Mono', monospace"
+            : "900 7px 'JetBrains Mono', monospace";
+          bgCtx.textAlign = "center";
+          bgCtx.textBaseline = "middle";
+          bgCtx.fillText(isCompact ? "PK" : "PICK", cx, cy + 0.5);
+        } else if (node.type === "place" || node.type === "workstation") {
+          // Cyan Place Station (Straight Feeder)
           bgCtx.fillStyle = isDark
             ? "rgba(6, 182, 212, 0.16)"
             : "rgba(6, 182, 212, 0.12)";
           bgCtx.beginPath();
-          bgCtx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 6);
+          bgCtx.roundRect(
+            x + pad,
+            y + pad,
+            cellW - pad * 2,
+            cellH - pad * 2,
+            Math.min(6, cellMin * 0.25),
+          );
           bgCtx.fill();
-          bgCtx.lineWidth = 1.4;
+          bgCtx.lineWidth = isCompact ? 1.0 : 1.4;
           bgCtx.strokeStyle = isDark ? "#22D3EE" : "#06B6D4";
           bgCtx.stroke();
 
@@ -321,26 +363,31 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
             ? "rgba(6, 182, 212, 0.3)"
             : "rgba(6, 182, 212, 0.2)";
           bgCtx.beginPath();
-          bgCtx.arc(cx, cy, 9, 0, Math.PI * 2);
+          bgCtx.arc(cx, cy, cellMin * 0.32, 0, Math.PI * 2);
           bgCtx.fill();
 
           bgCtx.fillStyle = isDark ? "#22D3EE" : "#0891B2";
-          bgCtx.font = "900 7px 'JetBrains Mono', monospace";
+          bgCtx.font = isCompact
+            ? "900 5.5px 'JetBrains Mono', monospace"
+            : "900 7px 'JetBrains Mono', monospace";
           bgCtx.textAlign = "center";
           bgCtx.textBaseline = "middle";
-          bgCtx.fillText("PICK", cx, cy + 0.5);
-
-          bgCtx.font = "bold 7.5px system-ui, -apple-system, sans-serif";
-          bgCtx.fillText(node.name.split(" ")[0], cx, y + cellH - 3.5);
+          bgCtx.fillText(isCompact ? "PL" : "PLACE", cx, cy + 0.5);
         } else if (node.type === "chute") {
-          // Emerald Chute (Sortation / Place Station)
+          // Emerald Chute (Place Station)
           bgCtx.fillStyle = isDark
             ? "rgba(16, 185, 129, 0.16)"
             : "rgba(16, 185, 129, 0.12)";
           bgCtx.beginPath();
-          bgCtx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 6);
+          bgCtx.roundRect(
+            x + pad,
+            y + pad,
+            cellW - pad * 2,
+            cellH - pad * 2,
+            Math.min(6, cellMin * 0.25),
+          );
           bgCtx.fill();
-          bgCtx.lineWidth = 1.4;
+          bgCtx.lineWidth = isCompact ? 1.0 : 1.4;
           bgCtx.strokeStyle = isDark ? "#34D399" : "#10B981";
           bgCtx.stroke();
 
@@ -348,79 +395,94 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
             ? "rgba(16, 185, 129, 0.3)"
             : "rgba(16, 185, 129, 0.2)";
           bgCtx.beginPath();
-          bgCtx.arc(cx, cy, 9, 0, Math.PI * 2);
+          bgCtx.arc(cx, cy, cellMin * 0.32, 0, Math.PI * 2);
           bgCtx.fill();
 
           bgCtx.fillStyle = isDark ? "#34D399" : "#059669";
-          bgCtx.font = "900 7px 'JetBrains Mono', monospace";
+          bgCtx.font = isCompact
+            ? "900 5.5px 'JetBrains Mono', monospace"
+            : "900 6.5px 'JetBrains Mono', monospace";
           bgCtx.textAlign = "center";
           bgCtx.textBaseline = "middle";
-          bgCtx.fillText("PLACE", cx, cy + 0.5);
-
-          bgCtx.font = "bold 7.5px system-ui, -apple-system, sans-serif";
-          bgCtx.fillText(node.name.split(" ")[0], cx, y + cellH - 3.5);
+          bgCtx.fillText(isCompact ? "CH" : "CHUTE", cx, cy + 0.5);
         } else if (node.type === "charger") {
           // Amber Automated Charger Bay
           bgCtx.fillStyle = isDark
             ? "rgba(245, 158, 11, 0.16)"
             : "rgba(245, 158, 11, 0.12)";
           bgCtx.beginPath();
-          bgCtx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 6);
+          bgCtx.roundRect(
+            x + pad,
+            y + pad,
+            cellW - pad * 2,
+            cellH - pad * 2,
+            Math.min(6, cellMin * 0.25),
+          );
           bgCtx.fill();
-          bgCtx.lineWidth = 1.4;
+          bgCtx.lineWidth = isCompact ? 1.0 : 1.4;
           bgCtx.strokeStyle = isDark ? "#FBBF24" : "#F59E0B";
           bgCtx.stroke();
 
           bgCtx.fillStyle = isDark ? "#FBBF24" : "#D97706";
-          bgCtx.font = "900 7.5px 'JetBrains Mono', monospace";
+          bgCtx.font = isCompact
+            ? "bold 7.5px system-ui, sans-serif"
+            : "900 7.5px 'JetBrains Mono', monospace";
           bgCtx.textAlign = "center";
           bgCtx.textBaseline = "middle";
-          bgCtx.fillText("⚡CHG", cx, cy + 0.5);
+          bgCtx.fillText(isCompact ? "⚡" : "⚡CHG", cx, cy + 0.5);
         } else if (node.type === "buffer") {
           // Purple Buffer Staging Area
           bgCtx.fillStyle = isDark
             ? "rgba(139, 92, 246, 0.16)"
             : "rgba(139, 92, 246, 0.12)";
           bgCtx.beginPath();
-          bgCtx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 6);
+          bgCtx.roundRect(
+            x + pad,
+            y + pad,
+            cellW - pad * 2,
+            cellH - pad * 2,
+            Math.min(6, cellMin * 0.25),
+          );
           bgCtx.fill();
-          bgCtx.lineWidth = 1.2;
+          bgCtx.lineWidth = isCompact ? 0.9 : 1.2;
           bgCtx.strokeStyle = isDark ? "#A78BFA" : "#8B5CF6";
           bgCtx.setLineDash([3, 2]);
           bgCtx.stroke();
           bgCtx.setLineDash([]);
 
           bgCtx.fillStyle = isDark ? "#A78BFA" : "#7C3AED";
-          bgCtx.font = "bold 9px system-ui, -apple-system, sans-serif";
+          bgCtx.font = isCompact
+            ? "bold 6.5px system-ui, sans-serif"
+            : "bold 9px system-ui, -apple-system, sans-serif";
           bgCtx.textAlign = "center";
           bgCtx.textBaseline = "middle";
           bgCtx.fillText("P", cx, cy + 0.5);
         } else if (node.type === "rack") {
           // Indigo 3D Tiered Storage Rack Pod
-          const rw = cellW - 4;
-          const rh = cellH - 4;
-          const rx = x + 2;
-          const ry = y + 2;
+          const rw = cellW - pad * 2;
+          const rh = cellH - pad * 2;
+          const rx = x + pad;
+          const ry = y + pad;
 
           // Outer Pod Enclosure Base
           bgCtx.fillStyle = isDark
             ? "rgba(99, 102, 241, 0.18)"
             : "rgba(99, 102, 241, 0.10)";
           bgCtx.beginPath();
-          bgCtx.roundRect(rx, ry, rw, rh, 4);
+          bgCtx.roundRect(rx, ry, rw, rh, Math.min(4, cellMin * 0.2));
           bgCtx.fill();
 
           // Metallic Outer Frame Outline
-          bgCtx.lineWidth = 1.2;
+          bgCtx.lineWidth = isCompact ? 0.9 : 1.2;
           bgCtx.strokeStyle = isDark ? "#818CF8" : "#6366F1";
           bgCtx.stroke();
 
-          // Tiered Shelf Dividers (3-layer storage rack)
+          // Tiered Shelf Dividers
+          const tierH = rh / 3;
           bgCtx.strokeStyle = isDark
             ? "rgba(165, 180, 252, 0.4)"
             : "rgba(99, 102, 241, 0.35)";
           bgCtx.lineWidth = 0.8;
-          const tierH = rh / 3;
           bgCtx.beginPath();
           bgCtx.moveTo(rx + 2, ry + tierH);
           bgCtx.lineTo(rx + rw - 2, ry + tierH);
@@ -432,22 +494,21 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
           bgCtx.fillStyle = isDark
             ? "rgba(99, 102, 241, 0.7)"
             : "rgba(99, 102, 241, 0.55)";
-          bgCtx.fillRect(rx + 2.5, ry + 2, rw * 0.42, tierH - 3);
+          bgCtx.fillRect(
+            rx + 2,
+            ry + 1.5,
+            Math.max(2, rw * 0.42),
+            Math.max(1, tierH - 2.5),
+          );
           bgCtx.fillStyle = isDark
             ? "rgba(245, 158, 11, 0.7)"
             : "rgba(245, 158, 11, 0.55)";
-          bgCtx.fillRect(rx + rw * 0.48, ry + tierH + 2, rw * 0.42, tierH - 3);
-
-          // Micro Rack Tag (e.g., A-01, B-03)
-          const rackTagMatch = node.name.match(/Rack ([A-G]-\d{2})/);
-          const rackTag = rackTagMatch
-            ? rackTagMatch[1]
-            : node.name.split(" ")[0];
-          bgCtx.fillStyle = isDark ? "#E0E7FF" : "#3730A3";
-          bgCtx.font = "bold 6.5px 'JetBrains Mono', monospace";
-          bgCtx.textAlign = "center";
-          bgCtx.textBaseline = "middle";
-          bgCtx.fillText(rackTag, cx, ry + tierH * 2 + tierH / 2);
+          bgCtx.fillRect(
+            rx + rw * 0.48,
+            ry + tierH + 1.5,
+            Math.max(2, rw * 0.42),
+            Math.max(1, tierH - 2.5),
+          );
         }
 
         bgCtx.restore();
@@ -570,6 +631,13 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     }
 
     // 5. Active Order Goals (Target Reticle)
+    const cellMin = Math.min(cellW, cellH);
+    const isCompactFleet = cellMin < 22;
+    const robotRadius = cellMin * 0.38;
+    const haloRadius = robotRadius * 1.6;
+    const arrowTip = robotRadius * 0.72;
+    const arrowBase = robotRadius * 0.36;
+
     if (showGoals && orders.length > 0) {
       ctx.save();
       for (const order of orders) {
@@ -587,20 +655,21 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
           }
 
           const isAssignedToSelected = assign.robotId === selectedRobotId;
+          const goalR = isAssignedToSelected ? cellMin * 0.55 : cellMin * 0.4;
 
           ctx.beginPath();
-          ctx.arc(gx, gy, isAssignedToSelected ? 16 : 12, 0, Math.PI * 2);
+          ctx.arc(gx, gy, goalR, 0, Math.PI * 2);
           ctx.fillStyle = isAssignedToSelected
             ? "rgba(0, 113, 227, 0.2)"
             : "rgba(0, 113, 227, 0.08)";
           ctx.fill();
           ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
-          ctx.lineWidth = isAssignedToSelected ? 2 : 1.5;
+          ctx.lineWidth = isAssignedToSelected ? 2 : 1.2;
           ctx.setLineDash([4, 3]);
           ctx.stroke();
 
           ctx.beginPath();
-          ctx.arc(gx, gy, 3, 0, Math.PI * 2);
+          ctx.arc(gx, gy, Math.max(2, cellMin * 0.1), 0, Math.PI * 2);
           ctx.fillStyle = isDark ? "#2997FF" : "#0071E3";
           ctx.fill();
         }
@@ -655,12 +724,18 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
       if (isSelected) {
         // Selection Focus Halo Glow
         ctx.beginPath();
-        ctx.arc(0, 0, isLODCompact ? 14 : 18, 0, Math.PI * 2);
+        ctx.arc(
+          0,
+          0,
+          isLODCompact ? haloRadius * 0.8 : haloRadius,
+          0,
+          Math.PI * 2,
+        );
         ctx.fillStyle = isDark
           ? "rgba(41, 151, 255, 0.25)"
           : "rgba(0, 113, 227, 0.2)";
         ctx.fill();
-        ctx.lineWidth = 2;
+        ctx.lineWidth = Math.max(1.5, robotRadius * 0.2);
         ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
         ctx.stroke();
       }
@@ -668,19 +743,21 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
       if (isLODCompact) {
         // LOD Level 1: Compact Circular Dot
         ctx.beginPath();
-        ctx.arc(0, 0, 6, 0, Math.PI * 2);
+        ctx.arc(0, 0, Math.max(3, robotRadius * 0.7), 0, Math.PI * 2);
         ctx.fillStyle = robotColor;
         ctx.fill();
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 1.0;
         ctx.strokeStyle = isDark ? "#1C1C1E" : "#FFFFFF";
         ctx.stroke();
       } else {
         // LOD Level 2: Full Detailed Robot Chassis & Direction Arrow
         ctx.beginPath();
-        ctx.arc(0, 0, 11, 0, Math.PI * 2);
+        ctx.arc(0, 0, robotRadius, 0, Math.PI * 2);
         ctx.fillStyle = isDark ? "#1C1C1E" : "#FFFFFF";
         ctx.fill();
-        ctx.lineWidth = isSelected ? 2.8 : 2.2;
+        ctx.lineWidth = isSelected
+          ? Math.max(2.0, robotRadius * 0.25)
+          : Math.max(1.2, robotRadius * 0.18);
         ctx.strokeStyle = robotColor;
         ctx.stroke();
 
@@ -689,10 +766,10 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
         ctx.save();
         ctx.rotate((rotDeg * Math.PI) / 180);
         ctx.beginPath();
-        ctx.moveTo(8, 0);
-        ctx.lineTo(0, -4);
-        ctx.lineTo(2, 0);
-        ctx.lineTo(0, 4);
+        ctx.moveTo(arrowTip, 0);
+        ctx.lineTo(0, -arrowBase);
+        ctx.lineTo(arrowTip * 0.25, 0);
+        ctx.lineTo(0, arrowBase);
         ctx.closePath();
         ctx.fillStyle = robotColor;
         ctx.fill();
@@ -700,31 +777,47 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
         // Center Pivot Dot
         ctx.beginPath();
-        ctx.arc(0, 0, 3, 0, Math.PI * 2);
+        ctx.arc(0, 0, Math.max(1.2, robotRadius * 0.25), 0, Math.PI * 2);
         ctx.fillStyle = robotColor;
         ctx.fill();
 
         // Floating Monospace ID Badge (Apple Pill Design)
-        if (showLabels || isSelected) {
-          ctx.font = "bold 8.5px 'JetBrains Mono', monospace, sans-serif";
+        // In compact 100 units mode, show labels for selected robot or when zoomed in
+        const shouldShowLabel =
+          isSelected || (showLabels && (!isCompactFleet || zoom >= 1.2));
+
+        if (shouldShowLabel) {
+          const fontSize = isCompactFleet ? 7 : 8.5;
+          ctx.font = `bold ${fontSize}px 'JetBrains Mono', monospace, sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
 
-          const textWidth = ctx.measureText(robot.id).width;
-          const badgeW = Math.max(textWidth + 10, 44);
-          const badgeH = 14;
-          const badgeY = 16;
+          const displayId =
+            isCompactFleet && !isSelected
+              ? robot.id.replace("robot-", "")
+              : robot.id;
+          const textWidth = ctx.measureText(displayId).width;
+          const badgeW = Math.max(
+            textWidth + (isCompactFleet ? 6 : 10),
+            isCompactFleet ? 24 : 44,
+          );
+          const badgeH = isCompactFleet ? 11 : 14;
+          const badgeY = robotRadius + (isCompactFleet ? 3 : 5);
 
           ctx.fillStyle = isDark
             ? "rgba(28, 28, 30, 0.95)"
             : "rgba(255, 255, 255, 0.95)";
           ctx.beginPath();
-          ctx.roundRect(-badgeW / 2, badgeY, badgeW, badgeH, 4);
+          ctx.roundRect(-badgeW / 2, badgeY, badgeW, badgeH, 3.5);
           ctx.fill();
           ctx.lineWidth = 0.75;
-          ctx.strokeStyle = isDark
-            ? "rgba(255, 255, 255, 0.12)"
-            : "rgba(0, 0, 0, 0.08)";
+          ctx.strokeStyle = isSelected
+            ? isDark
+              ? "#2997FF"
+              : "#0071E3"
+            : isDark
+              ? "rgba(255, 255, 255, 0.12)"
+              : "rgba(0, 0, 0, 0.08)";
           ctx.stroke();
 
           ctx.fillStyle = isSelected
@@ -734,7 +827,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
             : isDark
               ? "#F5F5F7"
               : "#1D1D1F";
-          ctx.fillText(robot.id, 0, badgeY + badgeH / 2);
+          ctx.fillText(displayId, 0, badgeY + badgeH / 2 + 0.5);
         }
       }
 

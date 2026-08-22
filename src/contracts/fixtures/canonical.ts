@@ -8,16 +8,36 @@
 const WIDTH_CELLS = 32;
 const HEIGHT_CELLS = 20;
 
-// Generate 32x20 warehouse cells with structural pillars
+// Generate 32x20 warehouse cells with structural pillars and storage racks (treated as pillars)
 const generateWarehouseCells = (): number[] => {
   const cells: number[] = [];
   for (let r = 0; r < HEIGHT_CELLS; r++) {
     for (let c = 0; c < WIDTH_CELLS; c++) {
-      // Structural pillars at building column grid intersections: (6, 12, 18, 24) x (5, 10, 15)
+      // Specified 6 structural pillars: B-19(7,15), E-19(19,15), B-11(7,11), E-11(19,11), B-01(7,4), E-01(19,4)
       const isPillar =
-        (c === 6 || c === 12 || c === 18 || c === 24) &&
-        (r === 5 || r === 10 || r === 15);
-      cells.push(isPillar ? 1 : 0);
+        (c === 7 || c === 19) && (r === 4 || r === 11 || r === 15);
+
+      // Storage Rack Pods (Bays A ~ F, excluding overwritten pillar cells & row 9-10 central crossway)
+      const isRack =
+        !isPillar &&
+        r >= 4 &&
+        r <= HEIGHT_CELLS - 5 &&
+        r !== 9 &&
+        r !== 10 &&
+        (c === 2 ||
+          c === 3 ||
+          c === 7 ||
+          c === 8 ||
+          c === 11 ||
+          c === 12 ||
+          c === 15 ||
+          c === 16 ||
+          c === 19 ||
+          c === 20 ||
+          c === 23 ||
+          c === 24);
+
+      cells.push(isPillar || isRack ? 1 : 0);
     }
   }
   return cells;
@@ -124,7 +144,7 @@ export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {
       data: {
         simulationTimeMs: 12400,
         occurredAt: "2026-08-22T04:29:59.850Z",
-        pose: { xMeters: 1.5, yMeters: 9.5, yawRadians: 3.1415926 }, // facing West (at Charger-02)
+        pose: { xMeters: 30.5, yMeters: 8.5, yawRadians: 0.0 }, // facing East (at Charger-03 on East wall)
         operationalState: "IDLE",
         connectivity: "CONNECTED",
         freshness: "CURRENT",

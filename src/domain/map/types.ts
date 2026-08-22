@@ -36,7 +36,9 @@ export type MapNodeType =
   | "pillar"
   | "buffer"
   | "chute"
-  | "workstation";
+  | "workstation"
+  | "pick"
+  | "place";
 
 export interface MapNode {
   id: number;

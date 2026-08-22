@@ -80,6 +80,10 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
 
   const baseWidth = 960;
   const baseHeight = (heightCells / widthCells) * baseWidth;
+  const cellW = baseWidth / widthCells;
+  const cellH = baseHeight / heightCells;
+  const cellMin = Math.min(cellW, cellH);
+  const isCompact = cellMin < 22;
 
   const mapDim = useMemo(
     () => ({
@@ -401,9 +405,6 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     widthCells,
     heightCells,
   ]);
-
-  const cellW = baseWidth / widthCells;
-  const cellH = baseHeight / heightCells;
 
   return (
     <div className="apple-card relative w-full h-full min-h-[400px] overflow-hidden flex flex-col select-none transition-colors duration-300">
@@ -734,25 +735,25 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                 const isHighlighted = isOutgoing || isIncoming;
 
                 let strokeColor = isDark ? "#52525B" : "#94A3B8";
-                let strokeWidth = 1.6;
-                let strokeOpacity = isDark ? 0.45 : 0.4;
+                let strokeWidth = 1.2;
+                let strokeOpacity = isDark ? 0.4 : 0.35;
 
                 if (isOutgoing) {
                   strokeColor = isDark ? "#2997FF" : "#0071E3";
-                  strokeWidth = 3.2;
+                  strokeWidth = 2.4;
                   strokeOpacity = 1.0;
                 } else if (isIncoming) {
                   strokeColor = isDark ? "#30D158" : "#34C759";
-                  strokeWidth = 3.2;
+                  strokeWidth = 2.4;
                   strokeOpacity = 1.0;
                 } else if (edge.type === "station_feeder") {
                   strokeColor = isDark ? "#FBBF24" : "#F59E0B";
-                  strokeOpacity = 0.85;
-                  strokeWidth = 2.4;
+                  strokeOpacity = 0.75;
+                  strokeWidth = 1.6;
                 } else if (edge.type === "corridor") {
                   strokeColor = isDark ? "#60A5FA" : "#0071E3";
-                  strokeOpacity = 0.65;
-                  strokeWidth = 2.2;
+                  strokeOpacity = 0.6;
+                  strokeWidth = 1.5;
                 }
 
                 const midX = (fromX + toX) / 2;
@@ -771,15 +772,16 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                       stroke={strokeColor}
                       strokeWidth={strokeWidth}
                       strokeOpacity={strokeOpacity}
+                      strokeLinecap="round"
                       filter={isHighlighted ? "url(#graphGlow)" : undefined}
                     />
                     {showEdgeArrows && edge.direction === "forward" && (
                       <polygon
-                        points="-4,-3.5 4.5,0 -4,3.5"
+                        points="-2.6,-2 3,0 -2.6,2 -1.2,0"
                         transform={`translate(${midX}, ${midY}) rotate(${angleDeg})`}
                         fill={strokeColor}
                         opacity={
-                          isHighlighted ? 1 : Math.min(1, strokeOpacity + 0.35)
+                          isHighlighted ? 1 : Math.min(0.9, strokeOpacity + 0.4)
                         }
                         filter={isHighlighted ? "url(#graphGlow)" : undefined}
                       />
@@ -825,7 +827,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                     x2={goalPos.x}
                     y2={goalPos.y}
                     stroke={isDark ? "#2997FF" : "#0071E3"}
-                    strokeWidth="3.5"
+                    strokeWidth="3"
                     strokeDasharray="6,4"
                     strokeLinecap="round"
                     filter="url(#graphGlow)"
@@ -849,20 +851,20 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                       <circle
                         cx={cx}
                         cy={cy}
-                        r={isSelectedGoal ? 16 : 12}
+                        r={isSelectedGoal ? 14 : 10}
                         fill={
                           isSelectedGoal
                             ? "rgba(0, 113, 227, 0.2)"
                             : "rgba(0, 113, 227, 0.08)"
                         }
                         stroke={isDark ? "#2997FF" : "#0071E3"}
-                        strokeWidth={isSelectedGoal ? "2" : "1.5"}
+                        strokeWidth={isSelectedGoal ? "2" : "1.4"}
                         strokeDasharray="4,3"
                       />
                       <circle
                         cx={cx}
                         cy={cy}
-                        r="3"
+                        r="2.5"
                         fill={isDark ? "#2997FF" : "#0071E3"}
                       />
                     </g>
@@ -889,17 +891,21 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                       key={`gn-${node.id}`}
                       cx={cx}
                       cy={cy}
-                      r="2.5"
+                      r="1.5"
                       fill={isDark ? "#52525B" : "#94A3B8"}
-                      fillOpacity="0.4"
+                      fillOpacity="0.3"
                     />
                   );
                 }
 
-                // Station Dimensions
+                // Station vs Waypoint Dimensions
                 const isStation = node.type !== "waypoint";
                 const isRack = node.type === "rack";
-                const radius = isStation ? 13 : 8;
+                const radius = isStation
+                  ? Math.min(12, cellMin * 0.42)
+                  : isSelected || isHovered
+                    ? Math.max(3, cellMin * 0.22)
+                    : Math.max(2, cellMin * 0.14);
 
                 return (
                   <g
@@ -917,11 +923,15 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                       <circle
                         cx={cx}
                         cy={cy}
-                        r={radius + 8}
+                        r={
+                          isStation
+                            ? radius + Math.min(7, cellMin * 0.25)
+                            : radius + Math.min(5, cellMin * 0.2)
+                        }
                         fill={ui.glowColor}
                         fillOpacity="0.3"
                         stroke={ui.strokeColor}
-                        strokeWidth="2.5"
+                        strokeWidth="2"
                         filter="url(#graphGlow)"
                       />
                     )}
@@ -931,14 +941,14 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                       <circle
                         cx={cx}
                         cy={cy}
-                        r={radius + 5}
+                        r={isStation ? radius + 3 : radius + 2}
                         fill={
                           isDark
                             ? "rgba(41, 151, 255, 0.2)"
                             : "rgba(0, 113, 227, 0.15)"
                         }
                         stroke={isDark ? "#2997FF" : "#0071E3"}
-                        strokeWidth="1.5"
+                        strokeWidth="1.2"
                       />
                     )}
 
@@ -946,23 +956,27 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                     {isRack ? (
                       <g>
                         <rect
-                          x={cx - 12}
-                          y={cy - 10}
-                          width="24"
-                          height="20"
-                          rx="4"
+                          x={cx - Math.min(12, cellMin * 0.42)}
+                          y={cy - Math.min(10, cellMin * 0.35)}
+                          width={Math.min(24, cellMin * 0.84)}
+                          height={Math.min(20, cellMin * 0.7)}
+                          rx={Math.min(4, cellMin * 0.2)}
                           fill={isDark ? "rgba(99, 102, 241, 0.25)" : "#EEF2FF"}
                           stroke={isDark ? "#818CF8" : "#6366F1"}
-                          strokeWidth="1.5"
+                          strokeWidth={isCompact ? "1" : "1.5"}
                         />
-                        <text
-                          x={cx}
-                          y={cy + 3}
-                          textAnchor="middle"
-                          className="fill-indigo-600 dark:fill-indigo-300 text-[7px] font-mono font-black select-none"
-                        >
-                          {node.name.match(/Rack ([A-G]-\d{2})/)?.[1] || "RACK"}
-                        </text>
+                        <line
+                          x1={cx - Math.min(10, cellMin * 0.35)}
+                          y1={cy}
+                          x2={cx + Math.min(10, cellMin * 0.35)}
+                          y2={cy}
+                          stroke={
+                            isDark
+                              ? "rgba(165, 180, 252, 0.4)"
+                              : "rgba(99, 102, 241, 0.35)"
+                          }
+                          strokeWidth="0.8"
+                        />
                       </g>
                     ) : (
                       <circle
@@ -977,50 +991,84 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                             : isStation
                               ? ui.fillColor
                               : isDark
-                                ? "#1C1C1E"
-                                : "#FFFFFF"
+                                ? isSelected || isHovered
+                                  ? "#2997FF"
+                                  : "#71717A"
+                                : isSelected || isHovered
+                                  ? "#0071E3"
+                                  : "#94A3B8"
                         }
-                        stroke={ui.strokeColor}
-                        strokeWidth={isStation ? "2.2" : "1.8"}
+                        stroke={
+                          isStation
+                            ? ui.strokeColor
+                            : isDark
+                              ? "#27272A"
+                              : "#FFFFFF"
+                        }
+                        strokeWidth={
+                          isStation
+                            ? isCompact
+                              ? "1.2"
+                              : "2"
+                            : isSelected || isHovered
+                              ? "1.5"
+                              : "0.8"
+                        }
                       />
                     )}
 
                     {/* Node Specialized Icons */}
                     {node.type === "charger" && (
                       <path
-                        d={`M ${cx + 1} ${cy - 4.5} L ${cx - 3} ${cy + 0.5} L ${cx} ${cy + 0.5} L ${cx - 1} ${cy + 4.5} L ${cx + 3} ${cy - 0.5} L ${cx} ${cy - 0.5} Z`}
+                        d={`M ${cx + 0.8} ${cy - radius * 0.4} L ${cx - radius * 0.25} ${cy + 0.5} L ${cx} ${cy + 0.5} L ${cx - 0.8} ${cy + radius * 0.4} L ${cx + radius * 0.25} ${cy - 0.5} L ${cx} ${cy - 0.5} Z`}
                         fill={isDark ? "#FBBF24" : "#D97706"}
                       />
                     )}
 
-                    {node.type === "workstation" && (
+                    {node.type === "pick" && (
                       <text
                         x={cx}
-                        y={cy + 2.5}
+                        y={cy + (isCompact ? 1.5 : 2.5)}
                         textAnchor="middle"
-                        className="fill-cyan-600 dark:fill-cyan-300 text-[7px] font-mono font-black select-none"
+                        className={`fill-amber-600 dark:fill-amber-300 font-mono font-black select-none ${
+                          isCompact ? "text-[5px]" : "text-[6.5px]"
+                        }`}
                       >
-                        PICK
+                        {isCompact ? "PK" : "PICK"}
                       </text>
                     )}
 
-                    {node.type === "chute" && (
+                    {(node.type === "place" ||
+                      node.type === "workstation" ||
+                      node.type === "chute") && (
                       <text
                         x={cx}
-                        y={cy + 2.5}
+                        y={cy + (isCompact ? 1.5 : 2.5)}
                         textAnchor="middle"
-                        className="fill-emerald-600 dark:fill-emerald-300 text-[6.5px] font-mono font-black select-none"
+                        className={`fill-cyan-600 dark:fill-cyan-300 font-mono font-black select-none ${
+                          isCompact
+                            ? node.type === "chute"
+                              ? "text-[5px]"
+                              : "text-[5px]"
+                            : "text-[6.5px]"
+                        }`}
                       >
-                        PLACE
+                        {isCompact
+                          ? node.type === "chute"
+                            ? "CH"
+                            : "PL"
+                          : "PLACE"}
                       </text>
                     )}
 
                     {node.type === "buffer" && (
                       <text
                         x={cx}
-                        y={cy + 3}
+                        y={cy + (isCompact ? 2 : 3)}
                         textAnchor="middle"
-                        className="fill-purple-600 dark:fill-purple-300 text-[9px] font-bold select-none"
+                        className={`fill-purple-600 dark:fill-purple-300 font-bold select-none ${
+                          isCompact ? "text-[6.5px]" : "text-[9px]"
+                        }`}
                       >
                         P
                       </text>
@@ -1029,29 +1077,13 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                     {node.type === "pillar" && (
                       <text
                         x={cx}
-                        y={cy + 3}
+                        y={cy + (isCompact ? 2 : 3)}
                         textAnchor="middle"
-                        className="fill-white text-[8px] font-bold select-none"
-                      >
-                        ✕
-                      </text>
-                    )}
-
-                    {/* Node Labels */}
-                    {showNodeLabels && (
-                      <text
-                        x={cx}
-                        y={cy + radius + 10}
-                        textAnchor="middle"
-                        className={`text-[8.5px] font-mono font-bold select-none ${
-                          isSelected
-                            ? "fill-[#0071E3] dark:fill-[#2997FF] font-black"
-                            : isStation
-                              ? "fill-[#1D1D1F] dark:fill-[#F5F5F7]"
-                              : "fill-[#86868B]"
+                        className={`fill-white font-bold select-none ${
+                          isCompact ? "text-[6px]" : "text-[8px]"
                         }`}
                       >
-                        {isStation ? node.name.split(" ")[0] : `#${node.id}`}
+                        ✕
                       </text>
                     )}
                   </g>
@@ -1089,6 +1121,18 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                       ? "#2997FF"
                       : "#0071E3";
 
+              const robotRadius = cellMin * 0.38;
+              const haloRadius = robotRadius * 1.6;
+              const arrowTip = robotRadius * 0.72;
+              const arrowBase = robotRadius * 0.36;
+
+              const shouldShowLabel =
+                isSelected || (showNodeLabels && (!isCompact || zoom >= 1.2));
+              const displayId =
+                isCompact && !isSelected
+                  ? robot.id.replace("robot-", "")
+                  : robot.id;
+
               return (
                 <g
                   key={`graph-robot-${robot.id}`}
@@ -1104,14 +1148,14 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                     <circle
                       cx="0"
                       cy="0"
-                      r="19"
+                      r={haloRadius}
                       fill={
                         isDark
                           ? "rgba(41, 151, 255, 0.25)"
                           : "rgba(0, 113, 227, 0.2)"
                       }
                       stroke={isDark ? "#2997FF" : "#0071E3"}
-                      strokeWidth="2"
+                      strokeWidth={Math.max(1.5, robotRadius * 0.2)}
                     />
                   )}
 
@@ -1119,57 +1163,77 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                   <circle
                     cx="0"
                     cy="0"
-                    r="11"
+                    r={robotRadius}
                     fill={isDark ? "#1C1C1E" : "#FFFFFF"}
                     stroke={robotColor}
-                    strokeWidth="2.5"
+                    strokeWidth={
+                      isSelected
+                        ? Math.max(2.0, robotRadius * 0.25)
+                        : Math.max(1.2, robotRadius * 0.18)
+                    }
                   />
 
                   {/* Direction Arrow */}
                   <g transform={`rotate(${rotationDeg})`}>
-                    <polygon points="8,0 0,-4 2,0 0,4" fill={robotColor} />
+                    <polygon
+                      points={`${arrowTip},0 0,-${arrowBase} ${arrowTip * 0.25},0 0,${arrowBase}`}
+                      fill={robotColor}
+                    />
                   </g>
 
                   {/* Center Pivot */}
-                  <circle cx="0" cy="0" r="2.5" fill={robotColor} />
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r={Math.max(1.2, robotRadius * 0.25)}
+                    fill={robotColor}
+                  />
 
                   {/* Floating Pill Monospace ID Badge */}
-                  <g transform="translate(0, 16)">
-                    <rect
-                      x="-22"
-                      y="-6"
-                      width="44"
-                      height="13"
-                      rx="3.5"
-                      fill={
-                        isDark
-                          ? "rgba(28, 28, 30, 0.95)"
-                          : "rgba(255, 255, 255, 0.95)"
-                      }
-                      stroke={
-                        isDark
-                          ? "rgba(255, 255, 255, 0.12)"
-                          : "rgba(0, 0, 0, 0.08)"
-                      }
-                      strokeWidth="0.75"
-                    />
-                    <text
-                      x="0"
-                      y="3"
-                      textAnchor="middle"
-                      className={`text-[8px] font-mono font-bold select-none ${
-                        isSelected
-                          ? isDark
-                            ? "fill-[#2997FF]"
-                            : "fill-[#0071E3]"
-                          : isDark
-                            ? "fill-[#F5F5F7]"
-                            : "fill-[#1D1D1F]"
-                      }`}
+                  {shouldShowLabel && (
+                    <g
+                      transform={`translate(0, ${robotRadius + (isCompact ? 3 : 5)})`}
                     >
-                      {robot.id}
-                    </text>
-                  </g>
+                      <rect
+                        x={isCompact ? -14 : -22}
+                        y={isCompact ? -5 : -6}
+                        width={isCompact ? 28 : 44}
+                        height={isCompact ? 10 : 13}
+                        rx={isCompact ? 2.5 : 3.5}
+                        fill={
+                          isDark
+                            ? "rgba(28, 28, 30, 0.95)"
+                            : "rgba(255, 255, 255, 0.95)"
+                        }
+                        stroke={
+                          isSelected
+                            ? isDark
+                              ? "#2997FF"
+                              : "#0071E3"
+                            : isDark
+                              ? "rgba(255, 255, 255, 0.12)"
+                              : "rgba(0, 0, 0, 0.08)"
+                        }
+                        strokeWidth="0.75"
+                      />
+                      <text
+                        x="0"
+                        y={isCompact ? 2.5 : 3}
+                        textAnchor="middle"
+                        className={`${isCompact ? "text-[6.5px]" : "text-[8px]"} font-mono font-bold select-none ${
+                          isSelected
+                            ? isDark
+                              ? "fill-[#2997FF]"
+                              : "fill-[#0071E3]"
+                            : isDark
+                              ? "fill-[#F5F5F7]"
+                              : "fill-[#1D1D1F]"
+                        }`}
+                      >
+                        {displayId}
+                      </text>
+                    </g>
+                  )}
                 </g>
               );
             })}

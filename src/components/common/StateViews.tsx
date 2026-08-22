@@ -1,7 +1,14 @@
 import React, { useState } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { NormalizedProblem } from "../../contracts/adapters/problem.ts";
-import { AlertOctagon, RefreshCw, Copy, Check, Info } from "lucide-react";
+import {
+  AlertOctagon,
+  RefreshCw,
+  Copy,
+  Check,
+  Info,
+  Database,
+} from "lucide-react";
 import { copyToClipboard } from "../../utils/ids/ids.ts";
 
 export const LoadingSkeleton: React.FC = () => {
@@ -51,13 +58,15 @@ export const EmptyStateView: React.FC = () => {
 interface ErrorStateViewProps {
   problem: NormalizedProblem;
   onRetry: () => void;
+  onUseFixture?: () => void;
 }
 
 export const ErrorStateView: React.FC<ErrorStateViewProps> = ({
   problem,
   onRetry,
+  onUseFixture,
 }) => {
-  const { t } = useAppConfig();
+  const { t, language } = useAppConfig();
   const [copiedTrace, setCopiedTrace] = useState<boolean>(false);
 
   const handleCopyTrace = async () => {
@@ -132,15 +141,30 @@ export const ErrorStateView: React.FC<ErrorStateViewProps> = ({
         </div>
       </div>
 
-      {problem.retryable && (
-        <button
-          onClick={onRetry}
-          className="mt-2 px-5 py-2 rounded-full bg-[#0071E3] hover:bg-[#0077ED] dark:bg-[#2997FF] dark:hover:bg-[#0071E3] text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>{t("stateErrorRetry")}</span>
-        </button>
-      )}
+      <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
+        {problem.retryable && (
+          <button
+            onClick={onRetry}
+            className="px-5 py-2 rounded-full bg-[#0071E3] hover:bg-[#0077ED] dark:bg-[#2997FF] dark:hover:bg-[#0071E3] text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>{t("stateErrorRetry")}</span>
+          </button>
+        )}
+        {onUseFixture && (
+          <button
+            onClick={onUseFixture}
+            className="px-5 py-2 rounded-full bg-[#F5F5F7] dark:bg-[#2C2C2E] hover:bg-[#EBEBED] dark:hover:bg-[#3A3A3C] text-[#1D1D1F] dark:text-[#F5F5F7] text-xs font-semibold border border-black/[0.08] dark:border-white/[0.1] shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <Database className="w-3.5 h-3.5 text-[#0071E3] dark:text-[#2997FF]" />
+            <span>
+              {language === "ko"
+                ? "모의 Fixture 모드로 복귀"
+                : "Switch to Fixture Mode"}
+            </span>
+          </button>
+        )}
+      </div>
     </div>
   );
 };

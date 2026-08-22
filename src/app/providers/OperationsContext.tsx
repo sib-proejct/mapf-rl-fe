@@ -30,6 +30,7 @@ import {
   advanceStressMotion,
   resetRobotMotionCache,
 } from "../../contracts/fixtures/stressFleet.ts";
+import { MEGA_WAREHOUSE_MAP_FIXTURE } from "../../contracts/fixtures/largeWarehouseMap.ts";
 
 export type FixtureMode =
   | "current"
@@ -115,14 +116,25 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         );
         setSnapshot(adapted);
       } else {
-        const baseAdapted = adaptOperationsSnapshot(
-          CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
-        );
-        if (scale > 3 && baseAdapted.map) {
-          const stressSnapshot = generateStressSnapshot(scale, baseAdapted.map);
+        if (scale > 3) {
+          const stressSnapshot = generateStressSnapshot(
+            scale,
+            MEGA_WAREHOUSE_MAP_FIXTURE,
+          );
           setSnapshot(stressSnapshot);
+          setSelectedRobotId((prev) =>
+            prev && prev.startsWith("robot-") ? prev : "robot-001",
+          );
         } else {
+          const baseAdapted = adaptOperationsSnapshot(
+            CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
+          );
           setSnapshot(baseAdapted);
+          setSelectedRobotId((prev) =>
+            prev && prev.startsWith("robot-") && !prev.startsWith("robot-00")
+              ? prev
+              : "robot-01",
+          );
         }
       }
       setLastFetchedAt(new Date());
@@ -143,6 +155,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       setSnapshot(adapted);
       setLastFetchedAt(new Date());
     } catch (err: unknown) {
+      setSnapshot(null);
       if (err instanceof ProblemError) {
         setError(err.problem);
       } else {

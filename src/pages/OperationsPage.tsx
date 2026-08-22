@@ -37,7 +37,8 @@ const MAX_WIDTH_RATIO = 88;
 
 export const OperationsPage: React.FC = () => {
   const { t, language } = useAppConfig();
-  const { snapshot, loading, error, refreshSnapshot } = useOperations();
+  const { snapshot, loading, error, refreshSnapshot, setUseFixture } =
+    useOperations();
 
   const [viewMode, setViewMode] = useState<"canvas" | "graph" | "accessible">(
     "canvas",
@@ -282,7 +283,11 @@ export const OperationsPage: React.FC = () => {
   if (error && !snapshot) {
     return (
       <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-6 animate-fade-in">
-        <ErrorStateView problem={error} onRetry={refreshSnapshot} />
+        <ErrorStateView
+          problem={error}
+          onRetry={refreshSnapshot}
+          onUseFixture={() => setUseFixture(true)}
+        />
       </div>
     );
   }
