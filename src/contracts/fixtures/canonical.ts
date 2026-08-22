@@ -1,7 +1,27 @@
 /**
  * Canonical test fixtures for Phase 1 MAPF-RL operator frontend.
  * Conforms strictly to Core OpenAPI 3.1 & JSON Schema 2020-12 specifications.
+ *
+ * Scaled to a realistic 32x20 Automated Fulfillment Center layout (640 cells, 1.0m/cell).
  */
+
+const WIDTH_CELLS = 32;
+const HEIGHT_CELLS = 20;
+
+// Generate 32x20 warehouse cells with structural pillars
+const generateWarehouseCells = (): number[] => {
+  const cells: number[] = [];
+  for (let r = 0; r < HEIGHT_CELLS; r++) {
+    for (let c = 0; c < WIDTH_CELLS; c++) {
+      // Structural pillars at building column grid intersections: (6, 12, 18, 24) x (5, 10, 15)
+      const isPillar =
+        (c === 6 || c === 12 || c === 18 || c === 24) &&
+        (r === 5 || r === 10 || r === 15);
+      cells.push(isPillar ? 1 : 0);
+    }
+  }
+  return cells;
+};
 
 export const CANONICAL_MAP_FIXTURE = {
   contractVersion: "1.0.0",
@@ -18,19 +38,10 @@ export const CANONICAL_MAP_FIXTURE = {
     yaw: "COUNTERCLOCKWISE_FROM_POSITIVE_X_RADIANS",
   },
   origin: { xMeters: 0.0, yMeters: 0.0 },
-  resolutionMeters: 0.5,
-  widthCells: 16,
-  heightCells: 12,
-  cells: [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0,
-    1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0,
-    0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1,
-    1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  ],
+  resolutionMeters: 1.0,
+  widthCells: WIDTH_CELLS,
+  heightCells: HEIGHT_CELLS,
+  cells: generateWarehouseCells(),
 };
 
 export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {
@@ -59,7 +70,7 @@ export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {
       data: {
         simulationTimeMs: 12400,
         occurredAt: "2026-08-22T04:29:59.950Z",
-        pose: { xMeters: 2.25, yMeters: 1.75, yawRadians: 0.0 },
+        pose: { xMeters: 4.5, yMeters: 2.5, yawRadians: 0.0 },
         operationalState: "EXECUTING",
         connectivity: "CONNECTED",
         freshness: "CURRENT",
@@ -86,7 +97,7 @@ export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {
       data: {
         simulationTimeMs: 12400,
         occurredAt: "2026-08-22T04:29:59.900Z",
-        pose: { xMeters: 5.75, yMeters: 4.25, yawRadians: 1.5707963 }, // facing North
+        pose: { xMeters: 14.5, yMeters: 8.5, yawRadians: 1.5707963 }, // facing North
         operationalState: "EXECUTING",
         connectivity: "CONNECTED",
         freshness: "CURRENT",
@@ -113,7 +124,7 @@ export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {
       data: {
         simulationTimeMs: 12400,
         occurredAt: "2026-08-22T04:29:59.850Z",
-        pose: { xMeters: 0.75, yMeters: 5.25, yawRadians: 3.1415926 }, // facing West
+        pose: { xMeters: 1.5, yMeters: 9.5, yawRadians: 3.1415926 }, // facing West (at Charger-02)
         operationalState: "IDLE",
         connectivity: "CONNECTED",
         freshness: "CURRENT",
@@ -137,7 +148,7 @@ export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {
         state: "Executing",
         orderUpdateId: 0,
         planRevisionId: "10000000-0000-4000-8000-000000000004",
-        assignments: [{ robotId: "robot-01", goalColumn: 7, goalRow: 10 }],
+        assignments: [{ robotId: "robot-01", goalColumn: 18, goalRow: 19 }],
         mapId: "00000000-0000-4000-8000-000000000001",
         mapRevision: 0,
         submittedAt: "2026-08-22T04:28:00.000Z",
@@ -154,7 +165,7 @@ export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {
         state: "Executing",
         orderUpdateId: 0,
         planRevisionId: "20000000-0000-4000-8000-000000000004",
-        assignments: [{ robotId: "robot-02", goalColumn: 14, goalRow: 8 }],
+        assignments: [{ robotId: "robot-02", goalColumn: 28, goalRow: 19 }],
         mapId: "00000000-0000-4000-8000-000000000001",
         mapRevision: 0,
         submittedAt: "2026-08-22T04:28:30.000Z",
@@ -167,7 +178,7 @@ export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {
 export const CANONICAL_STALE_SNAPSHOT_FIXTURE = {
   ...CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
   freshness: "STALE",
-  snapshotAt: "2026-08-22T04:15:00.000Z", // 15 mins ago
+  snapshotAt: "2026-08-22T04:15:00.000Z",
 };
 
 export const CANONICAL_PARTIAL_SNAPSHOT_FIXTURE = {

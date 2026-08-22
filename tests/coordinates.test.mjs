@@ -11,6 +11,9 @@ import {
   degreesToYaw,
   yawToScreenRotationDegrees,
   formatCoordinates,
+  cellToNodeId,
+  nodeIdToCell,
+  formatNodeId,
 } from "../src/utils/coordinates/coordinates.ts";
 
 test("cellToWorld calculates exact cell center with origin offset", () => {
@@ -96,4 +99,30 @@ test("yaw conversions handle radians and degrees correctly", () => {
 
 test("formatCoordinates returns formatted string", () => {
   assert.equal(formatCoordinates(1.234, 5.678), "(1.23m, 5.68m)");
+});
+
+test("cellToNodeId and nodeIdToCell perform accurate conversions", () => {
+  const widthCells = 16;
+  const heightCells = 12;
+
+  // (0, 0) is node 0
+  assert.equal(cellToNodeId({ column: 0, row: 0 }, widthCells), 0);
+  assert.deepEqual(nodeIdToCell(0, widthCells), { column: 0, row: 0 });
+
+  // (5, 2) is node 2 * 16 + 5 = 37
+  assert.equal(cellToNodeId({ column: 5, row: 2 }, widthCells), 37);
+  assert.deepEqual(nodeIdToCell(37, widthCells), { column: 5, row: 2 });
+
+  // Top-right corner (15, 11) is node 11 * 16 + 15 = 191
+  assert.equal(cellToNodeId({ column: 15, row: 11 }, widthCells), 191);
+  assert.deepEqual(nodeIdToCell(191, widthCells), { column: 15, row: 11 });
+
+  // Error handling for invalid width
+  assert.throws(() => cellToNodeId({ column: 0, row: 0 }, 0));
+  assert.throws(() => nodeIdToCell(0, -1));
+});
+
+test("formatNodeId formats node with and without grid cell", () => {
+  assert.equal(formatNodeId(42), "Node 42");
+  assert.equal(formatNodeId(42, { column: 10, row: 2 }), "Node 42 (10, 2)");
 });

@@ -147,3 +147,36 @@ export function yawToScreenRotationDegrees(yawRadians: number): number {
 export function formatCoordinates(xMeters: number, yMeters: number): string {
   return `(${xMeters.toFixed(2)}m, ${yMeters.toFixed(2)}m)`;
 }
+
+/**
+ * Calculates linear node ID from grid cell coordinates and map width.
+ */
+export function cellToNodeId(cell: GridCell, widthCells: number): number {
+  if (widthCells <= 0) {
+    throw new Error("widthCells must be positive and non-zero");
+  }
+  return cell.row * widthCells + cell.column;
+}
+
+/**
+ * Calculates grid cell coordinates from a linear node ID and map width.
+ */
+export function nodeIdToCell(nodeId: number, widthCells: number): GridCell {
+  if (widthCells <= 0) {
+    throw new Error("widthCells must be positive and non-zero");
+  }
+  return {
+    column: nodeId % widthCells,
+    row: Math.floor(nodeId / widthCells),
+  };
+}
+
+/**
+ * Formats node information as a human-readable string.
+ */
+export function formatNodeId(nodeId: number, cell?: GridCell): string {
+  if (cell) {
+    return `Node ${nodeId} (${cell.column}, ${cell.row})`;
+  }
+  return `Node ${nodeId}`;
+}

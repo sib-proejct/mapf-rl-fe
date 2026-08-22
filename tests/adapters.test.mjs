@@ -13,12 +13,12 @@ import {
 test("adaptRasterMap validates and adapts canonical map fixture", () => {
   const map = adaptRasterMap(CANONICAL_MAP_FIXTURE);
   assert.equal(map.contractVersion, "1.0.0");
-  assert.equal(map.widthCells, 16);
-  assert.equal(map.heightCells, 12);
-  assert.equal(map.resolutionMeters, 0.5);
+  assert.equal(map.widthCells, 32);
+  assert.equal(map.heightCells, 20);
+  assert.equal(map.resolutionMeters, 1.0);
   assert.equal(map.coordinateFrame.xAxis, "EAST");
   assert.equal(map.coordinateFrame.yAxis, "NORTH");
-  assert.equal(map.cells.length, 16 * 12);
+  assert.equal(map.cells.length, 32 * 20);
 });
 
 test("adaptRasterMap rejects invalid cells count or version", () => {
@@ -43,8 +43,8 @@ test("adaptOperationsSnapshot adapts canonical operations snapshot fixture", () 
 
   const robot01 = snapshot.robots.find((r) => r.id === "robot-01");
   assert.ok(robot01);
-  assert.equal(robot01.pose.xMeters, 2.25);
-  assert.equal(robot01.pose.yMeters, 1.75);
+  assert.equal(robot01.pose.xMeters, 4.5);
+  assert.equal(robot01.pose.yMeters, 2.5);
   assert.equal(robot01.operationalState, "EXECUTING");
   assert.equal(robot01.connectivity, "CONNECTED");
   assert.equal(robot01.currentOrderId, "order-01");
@@ -53,8 +53,8 @@ test("adaptOperationsSnapshot adapts canonical operations snapshot fixture", () 
   assert.ok(order01);
   assert.equal(order01.state, "Executing");
   assert.equal(order01.assignments[0].robotId, "robot-01");
-  assert.equal(order01.assignments[0].goalColumn, 7);
-  assert.equal(order01.assignments[0].goalRow, 10);
+  assert.equal(order01.assignments[0].goalColumn, 18);
+  assert.equal(order01.assignments[0].goalRow, 19);
 });
 
 test("adaptOperationsSnapshot preserves stale and partial freshness states", () => {
