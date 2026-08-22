@@ -40,10 +40,11 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     snapshot,
     loading,
     refreshSnapshot,
-    useFixture,
-    setUseFixture,
-    fixtureMode,
-    setFixtureMode,
+    transportMode,
+    setTransportMode,
+    mockScenario,
+    setMockScenario,
+    connectionState,
   } = useOperations();
 
   const env = import.meta.env.VITE_MAPF_PUBLIC_ENVIRONMENT || "LOCAL";
@@ -58,6 +59,20 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   );
 
   const getSystemStatusBadge = () => {
+    if (connectionState === "Reconciling") {
+      return {
+        label: t("connReconciling"),
+        bg: "text-[#0071E3] dark:text-[#2997FF]",
+        dot: "bg-[#0071E3] animate-spin",
+      };
+    }
+    if (connectionState === "ConnectingStream") {
+      return {
+        label: t("connConnecting"),
+        bg: "text-[#C93400] dark:text-[#FF9F0A]",
+        dot: "bg-[#FF9500] animate-pulse",
+      };
+    }
     if (safetyRobots.length > 0) {
       return {
         label:
@@ -97,6 +112,12 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           label: t("freshnessPartial"),
           bg: "text-[#0071E3] dark:text-[#2997FF]",
           dot: "bg-[#0071E3]",
+        };
+      case "RECONCILING":
+        return {
+          label: t("freshnessReconciling"),
+          bg: "text-[#0071E3] dark:text-[#2997FF]",
+          dot: "bg-[#0071E3] animate-pulse",
         };
       case "DISCONNECTED":
       default:
@@ -170,57 +191,84 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
 
         {/* Right: Data Source Mode, Freshness Indicator, Language, Theme */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          {/* Canonical Fixture Mode Capsule Selector */}
+          {/* Phase 2 Transport Mode & Scenario Capsule Selector */}
           <div className="flex items-center gap-1 bg-[#F5F5F7] dark:bg-[#1C1C1E] p-0.5 rounded-full border border-black/[0.06] dark:border-white/[0.08] text-[11px]">
+            {/* Fixture Stream */}
             <button
-              onClick={() => setUseFixture(true)}
+              onClick={() => setTransportMode("FIXTURE_STREAM")}
               className={`px-2.5 py-1 rounded-full transition-all flex items-center gap-1 cursor-pointer ${
-                useFixture
+                transportMode === "FIXTURE_STREAM"
                   ? "bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-[#F5F5F7] shadow-xs font-semibold"
                   : "text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]"
               }`}
-              title={t("sourceToggleHint")}
+              title="Interactive 10Hz fixture stream simulation"
             >
               <Database className="w-3 h-3 text-[#0071E3] dark:text-[#2997FF]" />
-              <span>Fixture</span>
+              <span>Fixture 10Hz</span>
             </button>
 
-            {useFixture && (
+            {transportMode === "FIXTURE_STREAM" && (
               <select
-                value={fixtureMode}
-                onChange={(e) => setFixtureMode(e.target.value as FixtureMode)}
+                value={mockScenario}
+                onChange={(e) => setMockScenario(e.target.value as any)}
                 className="bg-transparent text-[#1D1D1F] dark:text-[#F5F5F7] font-medium text-[11px] outline-none pr-1 cursor-pointer"
-                title="Select Fixture State scenario"
+                title="Select Phase 2 Reconciliation scenario"
               >
-                <option value="current" className="dark:bg-[#1C1C1E]">
-                  Current
+                <option value="nominal_10hz" className="dark:bg-[#1C1C1E]">
+                  10Hz Nominal
                 </option>
-                <option value="stale" className="dark:bg-[#1C1C1E]">
-                  Stale
+                <option
+                  value="duplicate_injection"
+                  className="dark:bg-[#1C1C1E]"
+                >
+                  Duplicate Inject
                 </option>
-                <option value="partial" className="dark:bg-[#1C1C1E]">
-                  Partial
+                <option value="gap_injection" className="dark:bg-[#1C1C1E]">
+                  Gap Inject
                 </option>
-                <option value="disconnected" className="dark:bg-[#1C1C1E]">
-                  Disconnected
+                <option value="stale_injection" className="dark:bg-[#1C1C1E]">
+                  Stale Inject
                 </option>
-                <option value="error" className="dark:bg-[#1C1C1E]">
-                  RFC 9457 Error
+                <option
+                  value="conflict_injection"
+                  className="dark:bg-[#1C1C1E]"
+                >
+                  Conflict Inject
+                </option>
+                <option
+                  value="slow_consumer_burst"
+                  className="dark:bg-[#1C1C1E]"
+                >
+                  Burst Coalesce
                 </option>
               </select>
             )}
 
+            {/* Live WebSocket */}
             <button
-              onClick={() => setUseFixture(false)}
+              onClick={() => setTransportMode("LIVE_WEBSOCKET")}
               className={`px-2.5 py-1 rounded-full transition-all flex items-center gap-1 cursor-pointer ${
-                !useFixture
+                transportMode === "LIVE_WEBSOCKET"
                   ? "bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-[#F5F5F7] shadow-xs font-semibold"
                   : "text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]"
               }`}
-              title="Connect to live Core REST API"
+              title="Connect to live Core WebSocket /ws/v1"
             >
               <Radio className="w-3 h-3 text-[#34C759]" />
-              <span>Live REST</span>
+              <span>Live WS</span>
+            </button>
+
+            {/* 5s Polling Fallback */}
+            <button
+              onClick={() => setTransportMode("POLLING_FALLBACK")}
+              className={`px-2.5 py-1 rounded-full transition-all flex items-center gap-1 cursor-pointer ${
+                transportMode === "POLLING_FALLBACK"
+                  ? "bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-[#F5F5F7] shadow-xs font-semibold"
+                  : "text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]"
+              }`}
+              title="Fallback 5-second REST snapshot polling"
+            >
+              <span>5s Poll</span>
             </button>
           </div>
 

@@ -1,6 +1,6 @@
 # MAPF-RL FE 설계서
 
-> - 상태: Phase 1 Read-only Operations vertical slice 완료 v0.3
+> - 상태: Phase 2 Realtime reconciliation 완료 v0.4
 > - 대상 저장소: `mapf-rl-fe`
 > - 기준일: 2026-08-22
 > - 상위 기준: [`../../mapf-rl-docs/ARCHITECTURE.md`](../../mapf-rl-docs/ARCHITECTURE.md)
@@ -851,10 +851,10 @@ FE rollback은 Core가 유지한 previous major contract와 generated consumer r
 
 ### Phase 2 — Realtime reconciliation
 
-- WebSocket lifecycle, cursor, bounded buffer와 reducer
-- Duplicate/stale/conflicting/gap fixture
-- Snapshot + stream reconciliation, reconnect와 5초 fallback polling
-- 10 Hz robot rendering과 performance baseline
+- [x] WebSocket lifecycle, cursor, bounded buffer와 reducer
+- [x] Duplicate/stale/conflicting/gap fixture
+- [x] Snapshot + stream reconciliation, reconnect와 5초 fallback polling
+- [x] 10 Hz robot rendering과 performance baseline
 
 ### Phase 3 — Order와 incident workflow
 

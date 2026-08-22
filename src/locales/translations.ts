@@ -216,11 +216,29 @@ export const translations = {
     stateTraceId: "추적 ID (Trace ID)",
     stateRequestId: "요청 ID (Request ID)",
 
-    // Data Source Toggle
-    sourceLive: "실제 Core API 스냅샷",
-    sourceFixture: "Canonical Fixture 모드",
-    sourceToggleHint:
-      "백엔드 연동 상태와 관계없이 Fixture로 검증할 수 있습니다.",
+    // Phase 2 Realtime Reconciliation
+    connConnecting: "연결 시도 중 (Connecting)",
+    connReconciling: "동기화 중 (Reconciling)",
+    connCurrent: "실시간 최신 (Current)",
+    connPollingFallback: "5초 폴링 대체 (5s Polling)",
+    transportFixture: "픽스처 스트림 (Fixture)",
+    transportLiveWs: "실시간 웹소켓 (Live WS)",
+    transportLivePolling: "5초 REST 폴링 (Live REST)",
+    diagDuplicates: "중복 (Duplicates)",
+    diagStale: "지연 (Stale)",
+    diagGaps: "누락 (Gaps)",
+    diagConflicts: "충돌 (Conflicts)",
+    diagCoalesced: "압축 (Coalesced)",
+    scenarioNominal10Hz: "10Hz 정상 스트림",
+    scenarioDuplicateInject: "중복 이벤트 주입 (Duplicate)",
+    scenarioGapInject: "시퀀스 누락 주입 (Gap)",
+    scenarioStaleInject: "과거 버전 주입 (Stale)",
+    scenarioConflictInject: "충돌 데이터 주입 (Conflict)",
+    scenarioSlowConsumer: "대규모 버스트 압축 (Coalesce)",
+    incidentGapWarning:
+      "시퀀스 누락(Gap)이 감지되어 권위 스냅샷 동기화를 진행합니다",
+    incidentConflictWarning:
+      "동일 버전 데이터 충돌이 감지되어 권위 스냅샷 동기화를 진행합니다",
 
     // Footer
     footerCopyright: "© 2026 MAPF-RL Platform. Operator Client.",
@@ -445,6 +463,30 @@ export const translations = {
     sourceFixture: "Canonical Fixture Mode",
     sourceToggleHint:
       "Toggle between live Core API snapshot and canonical offline fixtures.",
+
+    // Phase 2 Realtime Reconciliation
+    connConnecting: "Connecting Stream",
+    connReconciling: "Reconciling Stream",
+    connCurrent: "Real-time Current",
+    connPollingFallback: "5s Polling Fallback",
+    transportFixture: "Fixture Stream",
+    transportLiveWs: "Live WebSocket",
+    transportLivePolling: "5s REST Polling",
+    diagDuplicates: "Duplicates",
+    diagStale: "Stale",
+    diagGaps: "Gaps",
+    diagConflicts: "Conflicts",
+    diagCoalesced: "Coalesced",
+    scenarioNominal10Hz: "10Hz Nominal Stream",
+    scenarioDuplicateInject: "Duplicate Injection",
+    scenarioGapInject: "Sequence Gap Injection",
+    scenarioStaleInject: "Stale Event Injection",
+    scenarioConflictInject: "Conflict Injection",
+    scenarioSlowConsumer: "Burst Coalescing",
+    incidentGapWarning:
+      "Sequence gap detected; performing authoritative snapshot reconciliation",
+    incidentConflictWarning:
+      "Data conflict detected; performing authoritative snapshot reconciliation",
 
     // Footer
     footerCopyright: "© 2026 MAPF-RL Platform. Operator Client.",

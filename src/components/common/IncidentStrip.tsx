@@ -12,7 +12,7 @@ import { formatStateAge } from "../../utils/time/time.ts";
 
 export const IncidentStrip: React.FC = () => {
   const { t } = useAppConfig();
-  const { snapshot } = useOperations();
+  const { snapshot, diagnostics, connectionState } = useOperations();
 
   const robots = snapshot?.robots || [];
   const safetyRobots = robots.filter(
@@ -24,12 +24,20 @@ export const IncidentStrip: React.FC = () => {
   const freshness = snapshot?.freshness || "DISCONNECTED";
   const isStale = freshness === "STALE";
   const isPartial = freshness === "PARTIAL";
+  const isReconciling =
+    freshness === "RECONCILING" || connectionState === "Reconciling";
+  const hasGap = diagnostics.gapCount > 0 && diagnostics.lastDecision === "GAP";
+  const hasConflict =
+    diagnostics.conflictCount > 0 && diagnostics.lastDecision === "CONFLICT";
 
   const hasIncidents =
     safetyRobots.length > 0 ||
     disconnectedRobots.length > 0 ||
     isStale ||
-    isPartial;
+    isPartial ||
+    isReconciling ||
+    hasGap ||
+    hasConflict;
 
   if (!hasIncidents) {
     return null;
@@ -73,6 +81,28 @@ export const IncidentStrip: React.FC = () => {
               {snapshot?.snapshotAt
                 ? `(age: ${formatStateAge(snapshot.snapshotAt)})`
                 : ""}
+            </span>
+          </div>
+        )}
+
+        {/* Gap Alert */}
+        {hasGap && (
+          <div className="flex items-center gap-1.5 font-bold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 px-2.5 py-1 rounded-xl">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>
+              {t("incidentGapWarning")} (expected: #
+              {diagnostics.lastGapDetails?.expected}, received: #
+              {diagnostics.lastGapDetails?.received})
+            </span>
+          </div>
+        )}
+
+        {/* Conflict Alert */}
+        {hasConflict && (
+          <div className="flex items-center gap-1.5 font-bold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 px-2.5 py-1 rounded-xl">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>
+              {t("incidentConflictWarning")}: {diagnostics.lastConflictReason}
             </span>
           </div>
         )}

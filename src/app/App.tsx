@@ -47,7 +47,7 @@ const AppContent: React.FC = () => {
 
           {/* Right: Technical Metadata & Status */}
           <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-[#86868B]">
-            <span>Phase 1 — Read-only Operator Client</span>
+            <span>Phase 2 — Realtime Reconciliation Operator Client</span>
             <span className="hidden sm:inline text-[#D2D2D7] dark:text-[#3A3A3C]">
               |
             </span>
