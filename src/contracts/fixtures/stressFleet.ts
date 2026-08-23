@@ -183,6 +183,7 @@ export function generateStressSnapshot(
     map: baseMap,
     robots,
     orders,
+    incidents: [],
   };
 }
 

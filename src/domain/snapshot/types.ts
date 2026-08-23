@@ -1,6 +1,7 @@
-import { RasterMap } from "../map/types";
-import { Robot } from "../robot/types";
-import { Order } from "../order/types";
+import { RasterMap } from "../map/types.ts";
+import { Robot } from "../robot/types.ts";
+import { Order } from "../order/types.ts";
+import { Incident } from "../incident/types.ts";
 
 export type SnapshotFreshness =
   | "CURRENT"
@@ -28,4 +29,5 @@ export interface AuthoritativeSnapshot {
   map: RasterMap;
   robots: Robot[];
   orders: Order[];
+  incidents: Incident[];
 }

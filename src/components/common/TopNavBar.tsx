@@ -17,6 +17,8 @@ import {
   FileText,
   ShieldAlert,
   HelpCircle,
+  Plus,
+  Zap,
 } from "lucide-react";
 
 export type NavTab =
@@ -45,12 +47,17 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     mockScenario,
     setMockScenario,
     connectionState,
+    setIsOrderModalOpen,
+    setIsIncidentCenterOpen,
   } = useOperations();
 
   const env = import.meta.env.VITE_MAPF_PUBLIC_ENVIRONMENT || "LOCAL";
 
   const freshness = snapshot?.freshness || "DISCONNECTED";
   const robots = snapshot?.robots || [];
+  const incidents = snapshot?.incidents || [];
+  const activeIncidents = incidents.filter((i) => i.status === "ACTIVE");
+
   const safetyRobots = robots.filter(
     (r) => r.safety !== "NORMAL" && r.safety !== "WAIT",
   );
@@ -71,6 +78,16 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
         label: t("connConnecting"),
         bg: "text-[#C93400] dark:text-[#FF9F0A]",
         dot: "bg-[#FF9500] animate-pulse",
+      };
+    }
+    if (activeIncidents.length > 0) {
+      return {
+        label:
+          language === "ko"
+            ? `인시던트 (${activeIncidents.length})`
+            : `${activeIncidents.length} Incidents`,
+        bg: "text-[#D70015] dark:text-[#FF453A]",
+        dot: "bg-[#FF3B30] animate-pulse",
       };
     }
     if (safetyRobots.length > 0) {
@@ -113,12 +130,6 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           bg: "text-[#0071E3] dark:text-[#2997FF]",
           dot: "bg-[#0071E3]",
         };
-      case "RECONCILING":
-        return {
-          label: t("freshnessReconciling"),
-          bg: "text-[#0071E3] dark:text-[#2997FF]",
-          dot: "bg-[#0071E3] animate-pulse",
-        };
       case "DISCONNECTED":
       default:
         return {
@@ -132,56 +143,57 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   const badge = getSystemStatusBadge();
 
   return (
-    <header className="sticky top-0 z-40 w-full h-14 sm:h-16 bg-[#FBFBFD]/90 dark:bg-black/85 backdrop-blur-xl border-b border-black/[0.04] dark:border-white/[0.08] transition-colors duration-300">
-      <div className="max-w-[1920px] h-full mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 flex items-center justify-between gap-3">
-        {/* Left: Brand & Primary Navigation */}
-        <div className="flex items-center gap-5 sm:gap-8">
-          {/* Typographic SOGS/Apple Style Logo */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onSelectTab("operations")}
-              className="text-left group cursor-pointer focus:outline-none flex items-center gap-2"
-            >
-              <span className="text-base sm:text-lg font-black tracking-tight text-[#0071E3] dark:text-[#2997FF] group-hover:opacity-80 transition-opacity">
-                MAPF
+    <header className="sticky top-0 z-40 w-full h-14 sm:h-16 backdrop-blur-xl bg-[#FBFBFD]/90 dark:bg-black/85 border-b border-black/[0.04] dark:border-white/[0.08] transition-colors duration-300">
+      <div className="max-w-[1920px] mx-auto h-full px-4 sm:px-6 lg:px-8 xl:px-10 flex items-center justify-between gap-4">
+        {/* Left: Brand Identity & Product Logo */}
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2.5 select-none">
+            {/* Apple-style Gradient App Icon */}
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#0071E3] to-[#409CFF] dark:from-[#2997FF] dark:to-[#0062C4] shadow-sm flex items-center justify-center text-white">
+              <Activity className="w-4.5 h-4.5 stroke-[2.2]" />
+            </div>
+
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5 leading-none">
+                <span className="font-bold text-[15px] tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  MAPF-RL
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-[#86868B] dark:text-[#A1A1A6]">
+                  v1.0
+                </span>
+              </div>
+              <span className="text-[10px] text-[#86868B] font-mono tracking-tight">
+                Operator Client
               </span>
-              <span className="hidden md:inline text-xs sm:text-sm font-medium text-[#86868B] tracking-tight">
-                RL Operator
-              </span>
-            </button>
-            <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 text-[#86868B] font-semibold">
-              {env}
-            </span>
+            </div>
           </div>
 
-          {/* Nav Links with Apple Underline Indicator */}
-          <nav className="flex items-center space-x-1 sm:space-x-4 overflow-x-auto no-scrollbar py-1 min-w-0">
-            {(
-              [
-                { id: "operations", label: t("navOperations"), icon: Activity },
-                { id: "orders", label: t("navOrders"), icon: Box },
-                { id: "scenarios", label: t("navScenarios"), icon: Layers },
-                { id: "policies", label: t("navPolicies"), icon: Radio },
-                { id: "events", label: t("navEvents"), icon: FileText },
-              ] as const
-            ).map((tab) => {
+          {/* Center-Left: Global Navigation Single-Shell Tabs */}
+          <nav
+            aria-label="Main Navigation"
+            className="hidden md:flex items-center gap-1"
+          >
+            {[
+              { id: "operations", label: t("navOperations") },
+              { id: "orders", label: t("navOrders") },
+              { id: "scenarios", label: t("navScenarios") },
+              { id: "policies", label: t("navPolicies") },
+              { id: "events", label: t("navEvents") },
+            ].map((tab) => {
               const isActive = currentTab === tab.id;
-              const IconComp = tab.icon;
-
               return (
                 <button
-                  key={tab.id}
-                  onClick={() => onSelectTab(tab.id)}
-                  className={`text-xs sm:text-sm font-medium py-1 px-2 sm:px-1 shrink-0 relative transition-colors focus:outline-none whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  key={`nav-tab-${tab.id}`}
+                  onClick={() => onSelectTab(tab.id as NavTab)}
+                  className={`relative px-3.5 py-2 text-xs font-semibold rounded-full transition-all duration-200 cursor-pointer ${
                     isActive
-                      ? "text-[#0071E3] dark:text-[#2997FF] font-semibold"
-                      : "text-[#6E6E73] dark:text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]"
+                      ? "text-[#0071E3] dark:text-[#2997FF] bg-black/[0.03] dark:bg-white/[0.06]"
+                      : "text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]"
                   }`}
                 >
-                  <IconComp className="w-3.5 h-3.5" />
-                  <span>{tab.label}</span>
+                  {tab.label}
                   {isActive && (
-                    <span className="absolute -bottom-1 left-1 right-1 sm:left-0 sm:right-0 h-0.5 bg-[#0071E3] dark:bg-[#2997FF] rounded-full" />
+                    <span className="absolute bottom-0.5 left-3 right-3 h-0.5 bg-[#0071E3] dark:bg-[#2997FF] rounded-full" />
                   )}
                 </button>
               );
@@ -189,10 +201,41 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           </nav>
         </div>
 
-        {/* Right: Data Source Mode, Freshness Indicator, Language, Theme */}
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          {/* Phase 2 Transport Mode & Scenario Capsule Selector */}
-          <div className="flex items-center gap-1 bg-[#F5F5F7] dark:bg-[#1C1C1E] p-0.5 rounded-full border border-black/[0.06] dark:border-white/[0.08] text-[11px]">
+        {/* Right: Quick Action Controls, Incident Center, Transport, Env & Toggles */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Quick Action: New Dispatch Order Button */}
+          <button
+            type="button"
+            onClick={() => setIsOrderModalOpen(true)}
+            className="px-3 py-1.5 rounded-full bg-[#0071E3] dark:bg-[#2997FF] text-white text-xs font-bold hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-sm cursor-pointer"
+            title="Create New Dispatch Order (UUIDv4)"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">New Order</span>
+          </button>
+
+          {/* Quick Action: Incident Center Button */}
+          <button
+            type="button"
+            onClick={() => setIsIncidentCenterOpen(true)}
+            className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 cursor-pointer text-xs font-bold ${
+              activeIncidents.length > 0
+                ? "bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 text-[#D70015] dark:text-[#FF453A] border-[#FF3B30]/30 animate-pulse"
+                : "bg-[#F5F5F7] dark:bg-[#1C1C1E] text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] border-black/[0.06] dark:border-white/[0.08]"
+            }`}
+            title="Open Persistent Incident Center"
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Incidents</span>
+            {activeIncidents.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-[#FF3B30] text-white text-[10px] font-mono tabular-nums">
+                {activeIncidents.length}
+              </span>
+            )}
+          </button>
+
+          {/* Transport Mode & Scenario Selector Ribbon */}
+          <div className="hidden lg:flex items-center gap-1 bg-[#F5F5F7] dark:bg-[#1C1C1E] p-1 rounded-full border border-black/[0.06] dark:border-white/[0.08] text-xs">
             {/* Fixture Stream */}
             <button
               onClick={() => setTransportMode("FIXTURE_STREAM")}
@@ -216,6 +259,12 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
               >
                 <option value="nominal_10hz" className="dark:bg-[#1C1C1E]">
                   10Hz Nominal
+                </option>
+                <option
+                  value="safety_incident_sim"
+                  className="dark:bg-[#1C1C1E]"
+                >
+                  Safety Incident Inject
                 </option>
                 <option
                   value="duplicate_injection"

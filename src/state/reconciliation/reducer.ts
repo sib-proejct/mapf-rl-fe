@@ -6,7 +6,18 @@ import type {
   FreshnessState,
   Robot,
 } from "../../domain/robot/types.ts";
-import type { Order, OrderLifecycleState } from "../../domain/order/types.ts";
+import type {
+  Order,
+  OrderLifecycleState,
+  OrderAssignment,
+  OrderTimelineEntry,
+} from "../../domain/order/types.ts";
+import type {
+  Incident,
+  IncidentSeverity,
+  IncidentCategory,
+  IncidentStatus,
+} from "../../domain/incident/types.ts";
 import type {
   StreamEnvelope,
   ReconciliationState,
@@ -34,7 +45,41 @@ export type ReconciliationAction =
   | { type: "CONNECTION_STATE_CHANGED"; connectionState: ConnectionState }
   | { type: "TRANSPORT_MODE_CHANGED"; transportMode: StreamTransportMode }
   | { type: "GAP_RECONCILIATION_REQUESTED"; expected: number; received: number }
-  | { type: "RESET_DIAGNOSTICS" };
+  | { type: "RESET_DIAGNOSTICS" }
+  | {
+      type: "INCIDENT_ACKNOWLEDGED";
+      incidentId: string;
+      acknowledgedBy?: string;
+      occurredAtUtc: string;
+    }
+  | {
+      type: "INCIDENT_RESOLVED";
+      incidentId: string;
+      occurredAtUtc: string;
+    }
+  | {
+      type: "ORDER_CREATED_OPTIMISTIC";
+      order: Order;
+    }
+  | {
+      type: "ORDER_CANCELLED_CONFIRMED";
+      orderId: string;
+      orderUpdateId: number;
+      occurredAtUtc: string;
+    }
+  | {
+      type: "ORDER_REASSIGNED_CONFIRMED";
+      orderId: string;
+      orderUpdateId: number;
+      assignments: OrderAssignment[];
+      occurredAtUtc: string;
+    }
+  | {
+      type: "ROBOT_INSTANT_ACTION_APPLIED";
+      robotId: string;
+      action: string;
+      occurredAtUtc: string;
+    };
 
 export const INITIAL_DIAGNOSTICS: ReconciliationDiagnostics = {
   duplicateCount: 0,
@@ -294,14 +339,75 @@ function applyOrder(
       }))
     : existing?.assignments || [];
   const map = data.map as Record<string, unknown> | undefined;
+
+  const orderUpdateId =
+    typeof data.orderUpdateId === "number"
+      ? data.orderUpdateId
+      : existing?.orderUpdateId || 0;
+
+  const submittedAtUtc = existing?.submittedAtUtc || event.occurredAt;
+  const updatedAtUtc =
+    typeof data.updatedAt === "string" ? data.updatedAt : event.occurredAt;
+
+  // Build / update timeline
+  const prevTimeline: OrderTimelineEntry[] = existing?.timeline || [
+    {
+      id: `tl-${operation.entityId}-0`,
+      state: "Submitted",
+      occurredAtUtc: submittedAtUtc,
+      orderUpdateId: 0,
+      actor: "Operator",
+      detail: "Order submitted",
+    },
+  ];
+
+  let nextTimeline = [...prevTimeline];
+  const lastEntry = nextTimeline[nextTimeline.length - 1];
+
+  if (
+    !lastEntry ||
+    lastEntry.state !== state ||
+    lastEntry.orderUpdateId !== orderUpdateId
+  ) {
+    const isAppAck = state === "Applied";
+    const isExecReport = state === "Executing";
+    const actor: OrderTimelineEntry["actor"] =
+      isAppAck || isExecReport
+        ? "Simulator"
+        : state === "Submitted"
+          ? "Operator"
+          : "Core MAPF";
+
+    const detail =
+      typeof data.reason === "string" && data.reason
+        ? data.reason
+        : isAppAck
+          ? "Simulator acknowledged order command (Application Ack)"
+          : isExecReport
+            ? "Simulator runtime reported executing state"
+            : `Order transitioned to ${state}`;
+
+    nextTimeline.push({
+      id: `tl-${operation.entityId}-${orderUpdateId}-${state}-${Date.now()}`,
+      state,
+      occurredAtUtc: updatedAtUtc,
+      orderUpdateId,
+      planRevisionId:
+        typeof data.planRevisionId === "string"
+          ? data.planRevisionId
+          : existing?.planRevisionId,
+      actor,
+      detail,
+      isApplicationAck: isAppAck,
+      isExecutionReport: isExecReport,
+    });
+  }
+
   const order: Order = {
     id: operation.entityId,
     entityVersion: operation.entityVersion,
     contentDigestSha256: operation.contentDigestSha256,
-    orderUpdateId:
-      typeof data.orderUpdateId === "number"
-        ? data.orderUpdateId
-        : existing?.orderUpdateId || 0,
+    orderUpdateId,
     planRevisionId:
       typeof data.planRevisionId === "string"
         ? data.planRevisionId
@@ -320,9 +426,9 @@ function applyOrder(
         : typeof map?.revision === "number"
           ? map.revision
           : existing?.mapRevision,
-    submittedAtUtc: existing?.submittedAtUtc || event.occurredAt,
-    updatedAtUtc:
-      typeof data.updatedAt === "string" ? data.updatedAt : event.occurredAt,
+    submittedAtUtc,
+    updatedAtUtc,
+    timeline: nextTimeline,
   };
   return {
     ...snapshot,
@@ -375,28 +481,132 @@ function applyIncident(
   event: StreamEnvelope,
   operation: OperationsEventPayload,
 ): AuthoritativeSnapshot {
+  const data = operation.data;
+  const incidentId = operation.entityId;
+
+  const severity: IncidentSeverity = (
+    ["INFO", "WARNING", "CRITICAL"].includes(
+      String(data.severity).toUpperCase(),
+    )
+      ? String(data.severity).toUpperCase()
+      : "WARNING"
+  ) as IncidentSeverity;
+
+  const category: IncidentCategory = (
+    [
+      "safety",
+      "collision_risk",
+      "deadlock",
+      "fault",
+      "connectivity",
+      "contract",
+      "auth",
+      "policy",
+    ].includes(String(data.category).toLowerCase())
+      ? String(data.category).toLowerCase()
+      : "safety"
+  ) as IncidentCategory;
+
+  const status: IncidentStatus = (
+    ["ACTIVE", "ACKNOWLEDGED", "RESOLVED"].includes(
+      String(data.status).toUpperCase(),
+    )
+      ? String(data.status).toUpperCase()
+      : "ACTIVE"
+  ) as IncidentStatus;
+
   const robotId =
-    typeof operation.data.robotId === "string" ? operation.data.robotId : null;
-  const code = String(operation.data.code || "");
-  if (!robotId || code === "ORDER_COMPLETED") return snapshot;
-  const robots = snapshot.robots.map((robot) => {
-    if (robot.id !== robotId) return robot;
-    let safety = robot.safety;
-    if (code.includes("EMERGENCY")) safety = "EMERGENCY_STOP";
-    else if (code.includes("FAULT")) safety = "FAULT";
-    else if (code.includes("REJECT")) safety = "REJECT";
-    else if (code.includes("STOP") || code.includes("COLLISION")) {
-      safety = "CONTROLLED_STOP";
-    }
-    return {
-      ...robot,
-      safety,
-      operationalState:
-        safety === "NORMAL" ? robot.operationalState : "STOPPED",
-      occurredAtUtc: event.occurredAt,
-    };
-  });
-  return { ...snapshot, robots };
+    typeof data.robotId === "string"
+      ? data.robotId
+      : typeof data.relatedEntity === "object" &&
+          (data.relatedEntity as any)?.type === "ROBOT"
+        ? String((data.relatedEntity as any).id)
+        : undefined;
+
+  const code = String(data.code || data.reasonCode || "");
+  const description = String(
+    data.description || data.message || "Operational incident recorded",
+  );
+
+  const existingIncident = snapshot.incidents?.find(
+    (inc) => inc.id === incidentId,
+  );
+
+  const incident: Incident = {
+    id: incidentId,
+    entityVersion: operation.entityVersion,
+    contentDigestSha256: operation.contentDigestSha256,
+    severity,
+    category,
+    status,
+    occurredAtUtc:
+      typeof data.occurredAt === "string" ? data.occurredAt : event.occurredAt,
+    simulationTimeMs:
+      typeof data.simulationTimeMs === "number" ? data.simulationTimeMs : 0,
+    resolvedAtUtc:
+      typeof data.resolvedAt === "string" ? data.resolvedAt : undefined,
+    acknowledgedAtUtc:
+      typeof data.acknowledgedAt === "string" ? data.acknowledgedAt : undefined,
+    acknowledgedBy:
+      typeof data.acknowledgedBy === "string" ? data.acknowledgedBy : undefined,
+    reasonCode: code || existingIncident?.reasonCode || "INCIDENT",
+    description:
+      description || existingIncident?.description || "Incident recorded",
+    relatedEntity: robotId
+      ? { type: "ROBOT", id: robotId }
+      : data.relatedEntity && typeof data.relatedEntity === "object"
+        ? {
+            type: (data.relatedEntity as any).type || "ROBOT",
+            id: String((data.relatedEntity as any).id || ""),
+            version: (data.relatedEntity as any).version,
+          }
+        : undefined,
+    allowedActions: Array.isArray(data.allowedActions)
+      ? data.allowedActions.map(String)
+      : ["ACKNOWLEDGE"],
+  };
+
+  const incidents = snapshot.incidents || [];
+  const nextIncidents = existingIncident
+    ? incidents.map((inc) => (inc.id === incident.id ? incident : inc))
+    : [...incidents, incident];
+
+  // Also update robot safety state if this is an active safety incident
+  let nextRobots = snapshot.robots;
+  if (robotId && code !== "ORDER_COMPLETED") {
+    nextRobots = snapshot.robots.map((robot) => {
+      if (robot.id !== robotId) return robot;
+      let safety = robot.safety;
+      if (status === "RESOLVED") {
+        safety = "NORMAL";
+      } else if (code.includes("EMERGENCY")) {
+        safety = "EMERGENCY_STOP";
+      } else if (code.includes("FAULT")) {
+        safety = "FAULT";
+      } else if (code.includes("REJECT")) {
+        safety = "REJECT";
+      } else if (
+        code.includes("STOP") ||
+        code.includes("COLLISION") ||
+        code.includes("DEADLOCK")
+      ) {
+        safety = "CONTROLLED_STOP";
+      }
+      return {
+        ...robot,
+        safety,
+        operationalState:
+          safety === "NORMAL" ? robot.operationalState : "STOPPED",
+        occurredAtUtc: event.occurredAt,
+      };
+    });
+  }
+
+  return {
+    ...snapshot,
+    robots: nextRobots,
+    incidents: nextIncidents,
+  };
 }
 
 function entityKey(operation: OperationsEventPayload): string {
@@ -449,19 +659,20 @@ export function coalesceStreamBatch(events: StreamEnvelope[]): {
 function recordDecision(
   diagnostics: ReconciliationDiagnostics,
   result: ApplyResult,
-  processed: number,
+  eventCount = 1,
 ): ReconciliationDiagnostics {
+  const decision = result.decision;
   return {
     ...diagnostics,
-    duplicateCount:
-      diagnostics.duplicateCount + (result.decision === "DUPLICATE" ? 1 : 0),
-    staleCount: diagnostics.staleCount + (result.decision === "STALE" ? 1 : 0),
-    conflictCount:
-      diagnostics.conflictCount + (result.decision === "CONFLICT" ? 1 : 0),
-    gapCount: diagnostics.gapCount + (result.decision === "GAP" ? 1 : 0),
-    totalEventsProcessed: diagnostics.totalEventsProcessed + processed,
+    totalEventsProcessed: diagnostics.totalEventsProcessed + eventCount,
     lastReconciledAt: new Date().toISOString(),
-    lastDecision: result.decision,
+    lastDecision: decision,
+    duplicateCount:
+      diagnostics.duplicateCount + (decision === "DUPLICATE" ? 1 : 0),
+    staleCount: diagnostics.staleCount + (decision === "STALE" ? 1 : 0),
+    conflictCount:
+      diagnostics.conflictCount + (decision === "CONFLICT" ? 1 : 0),
+    gapCount: diagnostics.gapCount + (decision === "GAP" ? 1 : 0),
     lastConflictReason: result.conflictReason,
     lastGapDetails: result.gapDetails,
   };
@@ -474,8 +685,8 @@ function stateForSnapshot(
   if (snapshot.freshness === "CURRENT") return "Current";
   if (snapshot.freshness === "STALE") return "Stale";
   if (snapshot.freshness === "PARTIAL") return "Partial";
-  if (snapshot.freshness === "RECONCILING") return "Reconciling";
-  return "Disconnected";
+  if (snapshot.freshness === "DISCONNECTED") return "Disconnected";
+  return "Reconciling";
 }
 
 export function reconciliationReducer(
@@ -483,33 +694,36 @@ export function reconciliationReducer(
   action: ReconciliationAction,
 ): ReconciliationState {
   if (action.type === "SNAPSHOT_REPLACED") {
-    let snapshot: AuthoritativeSnapshot | null = action.snapshot;
-    let sequence = action.snapshot.cursor.eventSequence;
+    let snapshot = action.snapshot;
+    let sequence = snapshot.cursor.eventSequence;
     let diagnostics = state.diagnostics;
-    const buffered = [...(action.bufferedEvents || [])]
-      .filter((event) => event.eventSequence > sequence)
-      .sort((left, right) => left.eventSequence - right.eventSequence);
-    for (const event of buffered) {
-      const result = applySingleEvent(snapshot, event, sequence);
-      snapshot = result.nextSnapshot;
-      sequence = result.nextSequence;
-      diagnostics = recordDecision(diagnostics, result, 1);
-      if (result.decision === "GAP" || result.decision === "CONFLICT") break;
+
+    // Ensure incidents is initialized
+    if (!snapshot.incidents) {
+      snapshot = { ...snapshot, incidents: [] };
+    }
+
+    if (action.bufferedEvents?.length) {
+      for (const event of action.bufferedEvents) {
+        if (event.eventSequence <= sequence) continue;
+        const result = applySingleEvent(snapshot, event, sequence);
+        snapshot = result.nextSnapshot || snapshot;
+        sequence = result.nextSequence;
+        diagnostics = recordDecision(diagnostics, result, 1);
+        if (result.decision === "GAP" || result.decision === "CONFLICT") break;
+      }
     }
     return {
       ...state,
       snapshot,
       connectionState: stateForSnapshot(snapshot),
       cursor: {
-        streamId: snapshot?.cursor.streamId || state.cursor.streamId,
+        streamId: snapshot.cursor.streamId,
         eventSequence: sequence,
       },
       diagnostics: {
         ...diagnostics,
         lastReconciledAt: new Date().toISOString(),
-        lastDecision: buffered.length ? diagnostics.lastDecision : "APPLIED",
-        lastConflictReason: undefined,
-        lastGapDetails: undefined,
       },
     };
   }
@@ -528,15 +742,16 @@ export function reconciliationReducer(
       action.event,
       state.cursor.eventSequence,
     );
+    const snapshot = result.nextSnapshot;
     return {
       ...state,
-      snapshot: result.nextSnapshot,
+      snapshot,
       connectionState:
         result.decision === "GAP" || result.decision === "CONFLICT"
           ? "Reconciling"
-          : stateForSnapshot(result.nextSnapshot),
+          : stateForSnapshot(snapshot),
       cursor: {
-        streamId: result.nextSnapshot?.cursor.streamId || state.cursor.streamId,
+        streamId: snapshot?.cursor.streamId || state.cursor.streamId,
         eventSequence: result.nextSequence,
       },
       diagnostics: recordDecision(state.diagnostics, result, 1),
@@ -544,9 +759,7 @@ export function reconciliationReducer(
   }
 
   if (action.type === "STREAM_BATCH_RECEIVED") {
-    const events = [...action.events].sort(
-      (left, right) => left.eventSequence - right.eventSequence,
-    );
+    const events = action.events;
     if (!events.length) return state;
     let snapshot = state.snapshot;
     let sequence = state.cursor.eventSequence;
@@ -579,6 +792,187 @@ export function reconciliationReducer(
       diagnostics: {
         ...diagnostics,
         coalescedCount: diagnostics.coalescedCount + coalescedCount,
+      },
+    };
+  }
+
+  if (action.type === "INCIDENT_ACKNOWLEDGED") {
+    if (!state.snapshot) return state;
+    const incidents = state.snapshot.incidents || [];
+    const updatedIncidents = incidents.map((inc) =>
+      inc.id === action.incidentId
+        ? {
+            ...inc,
+            status: "ACKNOWLEDGED" as IncidentStatus,
+            acknowledgedAtUtc: action.occurredAtUtc,
+            acknowledgedBy: action.acknowledgedBy || "Operator",
+          }
+        : inc,
+    );
+    return {
+      ...state,
+      snapshot: {
+        ...state.snapshot,
+        incidents: updatedIncidents,
+      },
+    };
+  }
+
+  if (action.type === "INCIDENT_RESOLVED") {
+    if (!state.snapshot) return state;
+    const incidents = state.snapshot.incidents || [];
+    const targetIncident = incidents.find(
+      (inc) => inc.id === action.incidentId,
+    );
+    const updatedIncidents = incidents.map((inc) =>
+      inc.id === action.incidentId
+        ? {
+            ...inc,
+            status: "RESOLVED" as IncidentStatus,
+            resolvedAtUtc: action.occurredAtUtc,
+          }
+        : inc,
+    );
+
+    // If incident was related to a robot and resolved, restore robot's safety to NORMAL
+    let updatedRobots = state.snapshot.robots;
+    if (
+      targetIncident?.relatedEntity?.type === "ROBOT" &&
+      targetIncident.relatedEntity.id
+    ) {
+      const robotId = targetIncident.relatedEntity.id;
+      updatedRobots = updatedRobots.map((r) =>
+        r.id === robotId
+          ? {
+              ...r,
+              safety: "NORMAL",
+              operationalState:
+                r.operationalState === "STOPPED" ? "IDLE" : r.operationalState,
+            }
+          : r,
+      );
+    }
+
+    return {
+      ...state,
+      snapshot: {
+        ...state.snapshot,
+        incidents: updatedIncidents,
+        robots: updatedRobots,
+      },
+    };
+  }
+
+  if (action.type === "ORDER_CREATED_OPTIMISTIC") {
+    if (!state.snapshot) return state;
+    const existingOrders = state.snapshot.orders || [];
+    const existing = existingOrders.find((o) => o.id === action.order.id);
+    const orders = existing
+      ? existingOrders.map((o) => (o.id === action.order.id ? action.order : o))
+      : [action.order, ...existingOrders];
+    return {
+      ...state,
+      snapshot: {
+        ...state.snapshot,
+        orders,
+      },
+    };
+  }
+
+  if (action.type === "ORDER_CANCELLED_CONFIRMED") {
+    if (!state.snapshot) return state;
+    const orders = (state.snapshot.orders || []).map((o) => {
+      if (o.id !== action.orderId) return o;
+      const timeline = o.timeline || [];
+      return {
+        ...o,
+        state: "Cancelled" as OrderLifecycleState,
+        orderUpdateId: action.orderUpdateId,
+        updatedAtUtc: action.occurredAtUtc,
+        timeline: [
+          ...timeline,
+          {
+            id: `tl-${o.id}-${action.orderUpdateId}-Cancelled-${Date.now()}`,
+            state: "Cancelled" as OrderLifecycleState,
+            occurredAtUtc: action.occurredAtUtc,
+            orderUpdateId: action.orderUpdateId,
+            actor: "Operator" as const,
+            detail: "Order cancelled by operator",
+          },
+        ],
+      };
+    });
+    return {
+      ...state,
+      snapshot: {
+        ...state.snapshot,
+        orders,
+      },
+    };
+  }
+
+  if (action.type === "ORDER_REASSIGNED_CONFIRMED") {
+    if (!state.snapshot) return state;
+    const orders = (state.snapshot.orders || []).map((o) => {
+      if (o.id !== action.orderId) return o;
+      const timeline = o.timeline || [];
+      return {
+        ...o,
+        state: "Replanning" as OrderLifecycleState,
+        orderUpdateId: action.orderUpdateId,
+        assignments: action.assignments,
+        updatedAtUtc: action.occurredAtUtc,
+        timeline: [
+          ...timeline,
+          {
+            id: `tl-${o.id}-${action.orderUpdateId}-Replanning-${Date.now()}`,
+            state: "Replanning" as OrderLifecycleState,
+            occurredAtUtc: action.occurredAtUtc,
+            orderUpdateId: action.orderUpdateId,
+            actor: "Operator" as const,
+            detail: "Order goal / robot reassigned by operator",
+          },
+        ],
+      };
+    });
+    return {
+      ...state,
+      snapshot: {
+        ...state.snapshot,
+        orders,
+      },
+    };
+  }
+
+  if (action.type === "ROBOT_INSTANT_ACTION_APPLIED") {
+    if (!state.snapshot) return state;
+    const robots = state.snapshot.robots.map((r) => {
+      if (r.id !== action.robotId) return r;
+      let safety = r.safety;
+      let operationalState = r.operationalState;
+      if (action.action === "ESTOP") {
+        safety = "EMERGENCY_STOP";
+        operationalState = "STOPPED";
+      } else if (action.action === "CLEAR_ESTOP") {
+        safety = "NORMAL";
+        operationalState = "IDLE";
+      } else if (action.action === "PAUSE") {
+        operationalState = "HELD";
+      } else if (action.action === "RESUME") {
+        operationalState = "EXECUTING";
+      }
+      return {
+        ...r,
+        safety,
+        operationalState,
+        occurredAtUtc: action.occurredAtUtc,
+      };
+    });
+    return {
+      ...state,
+      snapshot: {
+        ...state.snapshot,
+        robots,
       },
     };
   }

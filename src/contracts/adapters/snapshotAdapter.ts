@@ -9,7 +9,17 @@ import type {
   FreshnessState,
   SafetyState,
 } from "../../domain/robot/types.ts";
-import type { Order, OrderLifecycleState } from "../../domain/order/types.ts";
+import type {
+  Order,
+  OrderLifecycleState,
+  OrderTimelineEntry,
+} from "../../domain/order/types.ts";
+import type {
+  Incident,
+  IncidentSeverity,
+  IncidentCategory,
+  IncidentStatus,
+} from "../../domain/incident/types.ts";
 import type { RasterMap } from "../../domain/map/types.ts";
 import { adaptRasterMap } from "./mapAdapter.ts";
 
@@ -93,6 +103,7 @@ export function adaptOperationsSnapshot(
   let currentMap: RasterMap | null = fallbackMap || null;
   const robots: Robot[] = [];
   const orders: Order[] = [];
+  const incidents: Incident[] = [];
   const entityVersions: AuthoritativeSnapshot["entityVersions"] = {};
   const connectivityBySimulator = new Map<
     string,
@@ -266,16 +277,78 @@ export function adaptOperationsSnapshot(
         goalRow: Number(a.goalRow) || 0,
       }));
 
+      const orderUpdateId =
+        typeof payload.orderUpdateId === "number"
+          ? payload.orderUpdateId
+          : typeof entityVersion === "number"
+            ? entityVersion
+            : 0;
+
+      const submittedAtUtc =
+        typeof payload.submittedAt === "string"
+          ? payload.submittedAt
+          : snapshotAt;
+      const updatedAtUtc =
+        typeof payload.updatedAt === "string" ? payload.updatedAt : snapshotAt;
+
+      // Parse timeline if provided or construct initial timeline
+      const timeline: OrderTimelineEntry[] = Array.isArray(payload.timeline)
+        ? payload.timeline.map((t: any) => ({
+            id: String(t.id || `tl-${Math.random()}`),
+            state: t.state as OrderLifecycleState,
+            occurredAtUtc: String(
+              t.occurredAtUtc || t.occurredAt || snapshotAt,
+            ),
+            orderUpdateId: Number(t.orderUpdateId ?? orderUpdateId),
+            planRevisionId: t.planRevisionId
+              ? String(t.planRevisionId)
+              : undefined,
+            actor:
+              t.actor ||
+              (t.state === "Applied" || t.state === "Executing"
+                ? "Simulator"
+                : "Core MAPF"),
+            detail: t.detail || undefined,
+            isApplicationAck: t.isApplicationAck ?? t.state === "Applied",
+            isExecutionReport: t.isExecutionReport ?? t.state === "Executing",
+          }))
+        : [
+            {
+              id: `tl-${entityId}-0`,
+              state: "Submitted",
+              occurredAtUtc: submittedAtUtc,
+              orderUpdateId: 0,
+              actor: "Operator",
+              detail: "Order submitted with client requestId",
+            },
+            ...(state !== "Submitted"
+              ? [
+                  {
+                    id: `tl-${entityId}-${orderUpdateId}`,
+                    state,
+                    occurredAtUtc: updatedAtUtc,
+                    orderUpdateId,
+                    actor: (state === "Applied" || state === "Executing"
+                      ? "Simulator"
+                      : "Core MAPF") as OrderTimelineEntry["actor"],
+                    isApplicationAck: state === "Applied",
+                    isExecutionReport: state === "Executing",
+                    detail:
+                      state === "Applied"
+                        ? "Simulator acknowledged order application (Application Ack)"
+                        : state === "Executing"
+                          ? "Simulator runtime reported executing state"
+                          : `Order state transitioned to ${state}`,
+                  },
+                ]
+              : []),
+          ];
+
       orders.push({
         id: String(entityId || `order-${orders.length + 1}`),
         entityVersion,
         contentDigestSha256,
-        orderUpdateId:
-          typeof payload.orderUpdateId === "number"
-            ? payload.orderUpdateId
-            : typeof entityVersion === "number"
-              ? entityVersion
-              : 0,
+        orderUpdateId,
         planRevisionId:
           typeof payload.planRevisionId === "string"
             ? payload.planRevisionId
@@ -294,14 +367,98 @@ export function adaptOperationsSnapshot(
             : typeof (payload.map as any)?.revision === "number"
               ? (payload.map as any).revision
               : undefined,
-        submittedAtUtc:
-          typeof payload.submittedAt === "string"
-            ? payload.submittedAt
+        submittedAtUtc,
+        updatedAtUtc,
+        timeline,
+      });
+    } else if (entityType === "INCIDENT") {
+      const severity: IncidentSeverity = (
+        ["INFO", "WARNING", "CRITICAL"].includes(
+          String(payload.severity).toUpperCase(),
+        )
+          ? String(payload.severity).toUpperCase()
+          : "WARNING"
+      ) as IncidentSeverity;
+
+      const category: IncidentCategory = (
+        [
+          "safety",
+          "collision_risk",
+          "deadlock",
+          "fault",
+          "connectivity",
+          "contract",
+          "auth",
+          "policy",
+        ].includes(String(payload.category).toLowerCase())
+          ? String(payload.category).toLowerCase()
+          : "safety"
+      ) as IncidentCategory;
+
+      const status: IncidentStatus = (
+        ["ACTIVE", "ACKNOWLEDGED", "RESOLVED"].includes(
+          String(payload.status).toUpperCase(),
+        )
+          ? String(payload.status).toUpperCase()
+          : "ACTIVE"
+      ) as IncidentStatus;
+
+      const allowedActions = Array.isArray(payload.allowedActions)
+        ? payload.allowedActions.map(String)
+        : ["ACKNOWLEDGE"];
+
+      incidents.push({
+        id: String(entityId || `incident-${incidents.length + 1}`),
+        entityVersion,
+        contentDigestSha256,
+        severity,
+        category,
+        status,
+        occurredAtUtc:
+          typeof payload.occurredAt === "string"
+            ? payload.occurredAt
             : snapshotAt,
-        updatedAtUtc:
-          typeof payload.updatedAt === "string"
-            ? payload.updatedAt
-            : snapshotAt,
+        simulationTimeMs:
+          typeof payload.simulationTimeMs === "number"
+            ? payload.simulationTimeMs
+            : 0,
+        resolvedAtUtc:
+          typeof payload.resolvedAt === "string"
+            ? payload.resolvedAt
+            : undefined,
+        acknowledgedAtUtc:
+          typeof payload.acknowledgedAt === "string"
+            ? payload.acknowledgedAt
+            : undefined,
+        acknowledgedBy:
+          typeof payload.acknowledgedBy === "string"
+            ? payload.acknowledgedBy
+            : undefined,
+        reasonCode: String(payload.reasonCode || payload.code || "INCIDENT"),
+        description: String(
+          payload.description ||
+            payload.message ||
+            "Operational incident recorded",
+        ),
+        relatedEntity:
+          payload.relatedEntity && typeof payload.relatedEntity === "object"
+            ? {
+                type: (payload.relatedEntity as any).type || "ROBOT",
+                id: String((payload.relatedEntity as any).id || ""),
+                version: (payload.relatedEntity as any).version,
+              }
+            : payload.robotId
+              ? {
+                  type: "ROBOT",
+                  id: String(payload.robotId),
+                }
+              : payload.orderId
+                ? {
+                    type: "ORDER",
+                    id: String(payload.orderId),
+                  }
+                : undefined,
+        allowedActions,
       });
     } else if (entityType === "CONNECTIVITY") {
       connectivityBySimulator.set(entityId, {
@@ -344,5 +501,6 @@ export function adaptOperationsSnapshot(
     map: currentMap,
     robots,
     orders,
+    incidents,
   };
 }

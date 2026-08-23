@@ -11,6 +11,7 @@ import React, {
 import type { AuthoritativeSnapshot } from "../../domain/snapshot/types.ts";
 import type { Robot } from "../../domain/robot/types.ts";
 import type { Order } from "../../domain/order/types.ts";
+import type { Incident } from "../../domain/incident/types.ts";
 import type { MapNode, MapTopology } from "../../domain/map/types.ts";
 import type {
   ConnectionState,
@@ -18,6 +19,15 @@ import type {
   ReconciliationDiagnostics,
   StreamEnvelope,
 } from "../../domain/event/types.ts";
+import type {
+  PendingMutation,
+  CreateOrderRequest,
+  CancelOrderRequest,
+  ReassignOrderRequest,
+  InstantActionRequest,
+  IncidentActionRequest,
+  MutationOperation,
+} from "../../domain/mutation/types.ts";
 import { deriveMapTopology } from "../../utils/map/topology.ts";
 import {
   NormalizedProblem,
@@ -48,6 +58,7 @@ import {
   MockStreamEngine,
   MockScenario,
 } from "../../services/websocket/mockStream.ts";
+import { globalMutationManager } from "../../state/mutations/mutationManager.ts";
 
 export type FixtureMode =
   | "current"
@@ -57,6 +68,13 @@ export type FixtureMode =
   | "error";
 
 export type FleetScale = 4 | 100;
+
+export interface ActionDialogTarget {
+  operation: MutationOperation;
+  order?: Order;
+  robot?: Robot;
+  incident?: Incident;
+}
 
 export interface OperationsContextType {
   // Snapshot and operational entity state
@@ -73,6 +91,9 @@ export interface OperationsContextType {
   selectedOrderId: string | null;
   setSelectedOrderId: (id: string | null) => void;
   selectedOrder: Order | null;
+  selectedIncidentId: string | null;
+  setSelectedIncidentId: (id: string | null) => void;
+  selectedIncident: Incident | null;
   selectedNodeId: number | null;
   setSelectedNodeId: (id: number | null) => void;
   selectedNode: MapNode | null;
@@ -98,6 +119,43 @@ export interface OperationsContextType {
   setMockScenario: (scenario: MockScenario) => void;
   diagnostics: ReconciliationDiagnostics;
   resetDiagnostics: () => void;
+
+  // Phase 3 Mutation & Incident state and actions
+  pendingMutations: PendingMutation[];
+  createOrder: (
+    req: CreateOrderRequest,
+    options?: { timeoutMs?: number },
+  ) => Promise<PendingMutation>;
+  cancelOrder: (
+    req: CancelOrderRequest,
+    options?: { timeoutMs?: number },
+  ) => Promise<PendingMutation>;
+  reassignOrder: (
+    req: ReassignOrderRequest,
+    options?: { timeoutMs?: number },
+  ) => Promise<PendingMutation>;
+  sendInstantAction: (
+    req: InstantActionRequest,
+    options?: { timeoutMs?: number },
+  ) => Promise<PendingMutation>;
+  acknowledgeIncident: (
+    req: IncidentActionRequest,
+    options?: { timeoutMs?: number },
+  ) => Promise<PendingMutation>;
+  resolveIncident: (
+    req: IncidentActionRequest,
+    options?: { timeoutMs?: number },
+  ) => Promise<PendingMutation>;
+  retryMutation: (requestId: string) => Promise<PendingMutation>;
+  dismissMutation: (requestId: string) => void;
+
+  // Dialog & Modal controls
+  isOrderModalOpen: boolean;
+  setIsOrderModalOpen: (open: boolean) => void;
+  actionDialogTarget: ActionDialogTarget | null;
+  setActionDialogTarget: (target: ActionDialogTarget | null) => void;
+  isIncidentCenterOpen: boolean;
+  setIsIncidentCenterOpen: (open: boolean) => void;
 }
 
 const OperationsContext = createContext<OperationsContextType | undefined>(
@@ -121,7 +179,22 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
     "robot-01",
   );
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(
+    null,
+  );
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
+
+  // Modals & Drawers
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState<boolean>(false);
+  const [actionDialogTarget, setActionDialogTarget] =
+    useState<ActionDialogTarget | null>(null);
+  const [isIncidentCenterOpen, setIsIncidentCenterOpen] =
+    useState<boolean>(false);
+
+  // Mutations
+  const [pendingMutations, setPendingMutations] = useState<PendingMutation[]>(
+    [],
+  );
 
   // Fleet settings
   const [fleetScale, setFleetScaleState] = useState<FleetScale>(4);
@@ -147,6 +220,13 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
   const wsClientRef = useRef<CoreWsClient | null>(null);
   const pollingManagerRef = useRef<PollingFallbackManager | null>(null);
   const mockEngineRef = useRef<MockStreamEngine>(new MockStreamEngine());
+
+  // Subscribe to Mutation Manager
+  useEffect(() => {
+    return globalMutationManager.subscribe((muts) => {
+      setPendingMutations(muts);
+    });
+  }, []);
 
   // Derive topology graph from map
   const topology = useMemo(() => {
@@ -248,6 +328,9 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         snapshot: snapshotData,
         bufferedEvents: buffered,
       });
+
+      // Reconcile any in-flight/uncertain mutations against fresh snapshot
+      globalMutationManager.reconcileWithSnapshot(snapshotData);
 
       setLastFetchedAt(new Date());
     } catch (err: unknown) {
@@ -375,6 +458,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       intervalMs: 5000,
       onSnapshot: (snap) => {
         dispatch({ type: "SNAPSHOT_REPLACED", snapshot: snap });
+        globalMutationManager.reconcileWithSnapshot(snap);
         setLastFetchedAt(new Date());
       },
       onError: (err) => {
@@ -431,6 +515,405 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [flushBatchQueue, reconState.connectionState, loadSnapshot]);
 
+  /* -------------------------------------------------------------------------- */
+  /* Phase 3 Mutation Actions                                                   */
+  /* -------------------------------------------------------------------------- */
+
+  const createOrder = useCallback(
+    async (
+      req: CreateOrderRequest,
+      options?: { timeoutMs?: number; forcedRequestId?: string },
+    ): Promise<PendingMutation> => {
+      const mut = globalMutationManager.startMutation(
+        "CREATE_ORDER",
+        req as unknown as Record<string, unknown>,
+        undefined,
+        undefined,
+        options?.forcedRequestId,
+      );
+
+      if (transportMode === "FIXTURE_STREAM") {
+        const orderId = `order-${Date.now().toString().slice(-4)}`;
+        const nowIso = new Date().toISOString();
+        const newOrder: Order = {
+          id: orderId,
+          entityVersion: 1,
+          orderUpdateId: 0,
+          state: "Submitted",
+          mapId: req.mapId,
+          mapRevision: req.mapRevision,
+          assignments: req.assignments.map((a) => ({
+            robotId: a.robotId || "robot-01",
+            goalColumn: a.goalColumn,
+            goalRow: a.goalRow,
+          })),
+          submittedAtUtc: nowIso,
+          updatedAtUtc: nowIso,
+          timeline: [
+            {
+              id: `tl-${orderId}-0`,
+              state: "Submitted",
+              occurredAtUtc: nowIso,
+              orderUpdateId: 0,
+              actor: "Operator",
+              detail: `Order submitted with client requestId ${mut.requestId.slice(0, 8)}...`,
+            },
+          ],
+        };
+
+        dispatch({ type: "ORDER_CREATED_OPTIMISTIC", order: newOrder });
+        setSelectedOrderId(orderId);
+        globalMutationManager.confirmMutation(mut.requestId, {
+          status: "CONFIRMED",
+          entityId: orderId,
+          entityVersion: 1,
+          orderUpdateId: 0,
+        });
+        return globalMutationManager.get(mut.requestId)!;
+      }
+
+      // Live REST execution
+      try {
+        const outcome = await defaultApiClient.createOrder(req, {
+          requestId: mut.requestId,
+          timeoutMs: options?.timeoutMs || 8000,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, outcome);
+        if (outcome.entityId) {
+          setSelectedOrderId(outcome.entityId);
+        }
+        await loadSnapshot();
+      } catch (err: unknown) {
+        if (
+          err instanceof ProblemError &&
+          err.problem.code === "MUTATION_TIMEOUT_UNCERTAIN"
+        ) {
+          globalMutationManager.markUncertain(
+            mut.requestId,
+            err.problem.detail,
+          );
+        } else {
+          globalMutationManager.rejectMutation(mut.requestId, err);
+        }
+      }
+
+      return globalMutationManager.get(mut.requestId)!;
+    },
+    [transportMode, loadSnapshot],
+  );
+
+  const cancelOrder = useCallback(
+    async (
+      req: CancelOrderRequest,
+      options?: { timeoutMs?: number; forcedRequestId?: string },
+    ): Promise<PendingMutation> => {
+      const mut = globalMutationManager.startMutation(
+        "CANCEL_ORDER",
+        req as unknown as Record<string, unknown>,
+        req.orderId,
+        req.orderUpdateId,
+        options?.forcedRequestId,
+      );
+
+      const nowIso = new Date().toISOString();
+
+      if (transportMode === "FIXTURE_STREAM") {
+        dispatch({
+          type: "ORDER_CANCELLED_CONFIRMED",
+          orderId: req.orderId,
+          orderUpdateId: req.orderUpdateId + 1,
+          occurredAtUtc: nowIso,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, {
+          status: "CONFIRMED",
+          entityId: req.orderId,
+          orderUpdateId: req.orderUpdateId + 1,
+        });
+        return globalMutationManager.get(mut.requestId)!;
+      }
+
+      try {
+        const outcome = await defaultApiClient.cancelOrder(req, {
+          requestId: mut.requestId,
+          timeoutMs: options?.timeoutMs || 8000,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, outcome);
+        await loadSnapshot();
+      } catch (err: unknown) {
+        if (
+          err instanceof ProblemError &&
+          err.problem.code === "MUTATION_TIMEOUT_UNCERTAIN"
+        ) {
+          globalMutationManager.markUncertain(
+            mut.requestId,
+            err.problem.detail,
+          );
+        } else {
+          globalMutationManager.rejectMutation(mut.requestId, err);
+        }
+      }
+
+      return globalMutationManager.get(mut.requestId)!;
+    },
+    [transportMode, loadSnapshot],
+  );
+
+  const reassignOrder = useCallback(
+    async (
+      req: ReassignOrderRequest,
+      options?: { timeoutMs?: number; forcedRequestId?: string },
+    ): Promise<PendingMutation> => {
+      const mut = globalMutationManager.startMutation(
+        "REASSIGN_ORDER",
+        req as unknown as Record<string, unknown>,
+        req.orderId,
+        req.orderUpdateId,
+        options?.forcedRequestId,
+      );
+
+      const nowIso = new Date().toISOString();
+
+      if (transportMode === "FIXTURE_STREAM") {
+        dispatch({
+          type: "ORDER_REASSIGNED_CONFIRMED",
+          orderId: req.orderId,
+          orderUpdateId: req.orderUpdateId + 1,
+          assignments: req.assignments,
+          occurredAtUtc: nowIso,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, {
+          status: "CONFIRMED",
+          entityId: req.orderId,
+          orderUpdateId: req.orderUpdateId + 1,
+        });
+        return globalMutationManager.get(mut.requestId)!;
+      }
+
+      try {
+        const outcome = await defaultApiClient.reassignOrder(req, {
+          requestId: mut.requestId,
+          timeoutMs: options?.timeoutMs || 8000,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, outcome);
+        await loadSnapshot();
+      } catch (err: unknown) {
+        if (
+          err instanceof ProblemError &&
+          err.problem.code === "MUTATION_TIMEOUT_UNCERTAIN"
+        ) {
+          globalMutationManager.markUncertain(
+            mut.requestId,
+            err.problem.detail,
+          );
+        } else {
+          globalMutationManager.rejectMutation(mut.requestId, err);
+        }
+      }
+
+      return globalMutationManager.get(mut.requestId)!;
+    },
+    [transportMode, loadSnapshot],
+  );
+
+  const sendInstantAction = useCallback(
+    async (
+      req: InstantActionRequest,
+      options?: { timeoutMs?: number; forcedRequestId?: string },
+    ): Promise<PendingMutation> => {
+      const mut = globalMutationManager.startMutation(
+        "INSTANT_ACTION",
+        req as unknown as Record<string, unknown>,
+        req.robotId,
+        undefined,
+        options?.forcedRequestId,
+      );
+
+      const nowIso = new Date().toISOString();
+
+      if (transportMode === "FIXTURE_STREAM") {
+        dispatch({
+          type: "ROBOT_INSTANT_ACTION_APPLIED",
+          robotId: req.robotId,
+          action: req.action,
+          occurredAtUtc: nowIso,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, {
+          status: "CONFIRMED",
+          entityId: req.robotId,
+        });
+        return globalMutationManager.get(mut.requestId)!;
+      }
+
+      try {
+        const outcome = await defaultApiClient.sendInstantAction(req, {
+          requestId: mut.requestId,
+          timeoutMs: options?.timeoutMs || 8000,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, outcome);
+        await loadSnapshot();
+      } catch (err: unknown) {
+        if (
+          err instanceof ProblemError &&
+          err.problem.code === "MUTATION_TIMEOUT_UNCERTAIN"
+        ) {
+          globalMutationManager.markUncertain(
+            mut.requestId,
+            err.problem.detail,
+          );
+        } else {
+          globalMutationManager.rejectMutation(mut.requestId, err);
+        }
+      }
+
+      return globalMutationManager.get(mut.requestId)!;
+    },
+    [transportMode, loadSnapshot],
+  );
+
+  const acknowledgeIncident = useCallback(
+    async (
+      req: IncidentActionRequest,
+      options?: { timeoutMs?: number },
+    ): Promise<PendingMutation> => {
+      const mut = globalMutationManager.startMutation(
+        "ACKNOWLEDGE_INCIDENT",
+        req as unknown as Record<string, unknown>,
+        req.incidentId,
+      );
+
+      const nowIso = new Date().toISOString();
+
+      if (transportMode === "FIXTURE_STREAM") {
+        dispatch({
+          type: "INCIDENT_ACKNOWLEDGED",
+          incidentId: req.incidentId,
+          acknowledgedBy: "Operator",
+          occurredAtUtc: nowIso,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, {
+          status: "CONFIRMED",
+          entityId: req.incidentId,
+        });
+        return globalMutationManager.get(mut.requestId)!;
+      }
+
+      try {
+        const outcome = await defaultApiClient.acknowledgeIncident(req, {
+          requestId: mut.requestId,
+          timeoutMs: options?.timeoutMs || 8000,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, outcome);
+        await loadSnapshot();
+      } catch (err: unknown) {
+        if (
+          err instanceof ProblemError &&
+          err.problem.code === "MUTATION_TIMEOUT_UNCERTAIN"
+        ) {
+          globalMutationManager.markUncertain(
+            mut.requestId,
+            err.problem.detail,
+          );
+        } else {
+          globalMutationManager.rejectMutation(mut.requestId, err);
+        }
+      }
+
+      return globalMutationManager.get(mut.requestId)!;
+    },
+    [transportMode, loadSnapshot],
+  );
+
+  const resolveIncident = useCallback(
+    async (
+      req: IncidentActionRequest,
+      options?: { timeoutMs?: number },
+    ): Promise<PendingMutation> => {
+      const mut = globalMutationManager.startMutation(
+        "RESOLVE_INCIDENT",
+        req as unknown as Record<string, unknown>,
+        req.incidentId,
+      );
+
+      const nowIso = new Date().toISOString();
+
+      if (transportMode === "FIXTURE_STREAM") {
+        dispatch({
+          type: "INCIDENT_RESOLVED",
+          incidentId: req.incidentId,
+          occurredAtUtc: nowIso,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, {
+          status: "CONFIRMED",
+          entityId: req.incidentId,
+        });
+        return globalMutationManager.get(mut.requestId)!;
+      }
+
+      try {
+        const outcome = await defaultApiClient.resolveIncident(req, {
+          requestId: mut.requestId,
+          timeoutMs: options?.timeoutMs || 8000,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, outcome);
+        await loadSnapshot();
+      } catch (err: unknown) {
+        if (
+          err instanceof ProblemError &&
+          err.problem.code === "MUTATION_TIMEOUT_UNCERTAIN"
+        ) {
+          globalMutationManager.markUncertain(
+            mut.requestId,
+            err.problem.detail,
+          );
+        } else {
+          globalMutationManager.rejectMutation(mut.requestId, err);
+        }
+      }
+
+      return globalMutationManager.get(mut.requestId)!;
+    },
+    [transportMode, loadSnapshot],
+  );
+
+  const retryMutation = useCallback(
+    async (requestId: string): Promise<PendingMutation> => {
+      const existing = globalMutationManager.get(requestId);
+      if (!existing) {
+        throw new Error(`Mutation ${requestId} not found for retry.`);
+      }
+
+      if (existing.operation === "CREATE_ORDER") {
+        return createOrder(existing.payload as unknown as CreateOrderRequest, {
+          forcedRequestId: requestId,
+        });
+      } else if (existing.operation === "CANCEL_ORDER") {
+        return cancelOrder(existing.payload as unknown as CancelOrderRequest, {
+          forcedRequestId: requestId,
+        });
+      } else if (existing.operation === "REASSIGN_ORDER") {
+        return reassignOrder(
+          existing.payload as unknown as ReassignOrderRequest,
+          {
+            forcedRequestId: requestId,
+          },
+        );
+      } else if (existing.operation === "INSTANT_ACTION") {
+        return sendInstantAction(
+          existing.payload as unknown as InstantActionRequest,
+          {
+            forcedRequestId: requestId,
+          },
+        );
+      }
+      return existing;
+    },
+    [createOrder, cancelOrder, reassignOrder, sendInstantAction],
+  );
+
+  const dismissMutation = useCallback((requestId: string) => {
+    globalMutationManager.dismissMutation(requestId);
+  }, []);
+
   // Set transport mode wrapper
   const setTransportMode = useCallback((mode: StreamTransportMode) => {
     setTransportModeState(mode);
@@ -483,6 +966,9 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
     reconState.snapshot?.robots.find((r) => r.id === selectedRobotId) || null;
   const selectedOrder =
     reconState.snapshot?.orders.find((o) => o.id === selectedOrderId) || null;
+  const selectedIncident =
+    reconState.snapshot?.incidents?.find((i) => i.id === selectedIncidentId) ||
+    null;
   const selectedNode =
     selectedNodeId !== null && topology?.nodeMap
       ? topology.nodeMap.get(selectedNodeId) || null
@@ -502,6 +988,9 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         selectedOrderId,
         setSelectedOrderId,
         selectedOrder,
+        selectedIncidentId,
+        setSelectedIncidentId,
+        selectedIncident,
         selectedNodeId,
         setSelectedNodeId,
         selectedNode,
@@ -521,6 +1010,24 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         setMockScenario,
         diagnostics: reconState.diagnostics,
         resetDiagnostics,
+
+        // Phase 3
+        pendingMutations,
+        createOrder,
+        cancelOrder,
+        reassignOrder,
+        sendInstantAction,
+        acknowledgeIncident,
+        resolveIncident,
+        retryMutation,
+        dismissMutation,
+
+        isOrderModalOpen,
+        setIsOrderModalOpen,
+        actionDialogTarget,
+        setActionDialogTarget,
+        isIncidentCenterOpen,
+        setIsIncidentCenterOpen,
       }}
     >
       {children}

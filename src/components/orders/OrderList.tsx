@@ -1,7 +1,18 @@
 import React from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
-import { Box, Flag, Bot, Clock, ArrowRight, CheckCircle2 } from "lucide-react";
+import {
+  Box,
+  Flag,
+  Bot,
+  Clock,
+  ArrowRight,
+  CheckCircle2,
+  Plus,
+  RotateCcw,
+  XCircle,
+  Activity,
+} from "lucide-react";
 import { formatStateAge } from "../../utils/time/time.ts";
 
 export interface OrderListProps {
@@ -10,8 +21,14 @@ export interface OrderListProps {
 
 export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
   const { t } = useAppConfig();
-  const { snapshot, selectedOrderId, setSelectedOrderId, setSelectedRobotId } =
-    useOperations();
+  const {
+    snapshot,
+    selectedOrderId,
+    setSelectedOrderId,
+    setSelectedRobotId,
+    setIsOrderModalOpen,
+    setActionDialogTarget,
+  } = useOperations();
 
   const orders = snapshot?.orders || [];
 
@@ -20,9 +37,10 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
       case "Executing":
         return "bg-[#34C759] dark:bg-[#30D158]";
       case "Applied":
+        return "bg-[#0071E3] dark:bg-[#2997FF]";
       case "Dispatched":
       case "Dispatchable":
-        return "bg-[#0071E3] dark:bg-[#2997FF]";
+        return "bg-[#64D2FF]";
       case "Planning":
       case "Submitted":
         return "bg-[#AF52DE]";
@@ -43,6 +61,7 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
       case "Executing":
         return "bg-[#34C759]/10 text-[#248A3D] dark:text-[#30D158] border-[#34C759]/20";
       case "Applied":
+        return "bg-[#0071E3]/15 text-[#0071E3] dark:text-[#2997FF] border-[#0071E3]/30 font-bold";
       case "Dispatched":
       case "Dispatchable":
         return "bg-[#0071E3]/10 text-[#0071E3] dark:text-[#2997FF] border-[#0071E3]/20";
@@ -67,14 +86,15 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
         return 0;
       case "Planning":
         return 1;
-      case "Dispatched":
-      case "Applied":
       case "Dispatchable":
+      case "Dispatched":
         return 2;
-      case "Executing":
+      case "Applied":
         return 3;
-      case "Completed":
+      case "Executing":
         return 4;
+      case "Completed":
+        return 5;
       default:
         return 2;
     }
@@ -88,33 +108,50 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
           : "apple-card p-4 sm:p-5 flex flex-col h-[560px] sm:h-[600px] transition-colors duration-300"
       }
     >
-      {/* Header (only shown when not embedded) */}
-      {!embedded && (
-        <div className="flex items-center justify-between gap-2 mb-3.5 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-[#0071E3]/10 dark:bg-[#2997FF]/15 flex items-center justify-center text-[#0071E3] dark:text-[#2997FF]">
-              <Box className="w-3.5 h-3.5" />
-            </div>
-            <h3 className="text-sm font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight">
-              {t("orderListTitle")}
-            </h3>
-            <span className="text-[11px] font-mono font-bold bg-[#F5F5F7] dark:bg-[#252528] text-[#86868B] px-2 py-0.5 rounded-full border border-black/[0.04] dark:border-white/[0.06] tabular-nums">
-              {orders.length}
-            </span>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 mb-3.5 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-[#0071E3]/10 dark:bg-[#2997FF]/15 flex items-center justify-center text-[#0071E3] dark:text-[#2997FF]">
+            <Box className="w-3.5 h-3.5" />
           </div>
+          <h3 className="text-sm font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight">
+            {t("orderListTitle")}
+          </h3>
+          <span className="text-[11px] font-mono font-bold bg-[#F5F5F7] dark:bg-[#252528] text-[#86868B] px-2 py-0.5 rounded-full border border-black/[0.04] dark:border-white/[0.06] tabular-nums">
+            {orders.length}
+          </span>
         </div>
-      )}
+
+        <button
+          type="button"
+          onClick={() => setIsOrderModalOpen(true)}
+          className="px-2.5 py-1 rounded-full bg-[#0071E3] dark:bg-[#2997FF] text-white text-[11px] font-semibold hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer shadow-xs"
+        >
+          <Plus className="w-3 h-3" />
+          <span>New Order</span>
+        </button>
+      </div>
 
       {/* Orders List */}
       <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
         {orders.length === 0 ? (
-          <div className="py-12 text-center text-xs text-[#86868B] font-medium">
-            {t("orderNoOrders")}
+          <div className="py-12 text-center text-xs text-[#86868B] space-y-3">
+            <p className="font-medium">{t("orderNoOrders")}</p>
+            <button
+              type="button"
+              onClick={() => setIsOrderModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-full bg-[#0071E3] text-white text-xs font-semibold hover:opacity-90 inline-flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create First Order</span>
+            </button>
           </div>
         ) : (
           orders.map((order) => {
             const isSelected = order.id === selectedOrderId;
             const stepIdx = getLifecycleStepIndex(order.state);
+            const isAppAck = order.state === "Applied";
+            const isExec = order.state === "Executing";
 
             return (
               <div
@@ -145,17 +182,29 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                         order.state,
                       )}`}
                     />
-                    <span>{order.state}</span>
+                    <span>
+                      {isAppAck
+                        ? "Applied (Ack)"
+                        : isExec
+                          ? "Executing (Motion)"
+                          : order.state}
+                    </span>
                   </div>
                 </div>
 
-                {/* Micro Lifecycle Step Bar */}
+                {/* Micro 5-Step Lifecycle Progression */}
                 <div className="flex items-center gap-1 py-1">
-                  {["Plan", "Route", "Dispatch", "Exec"].map((step, idx) => {
-                    const isDone = idx <= stepIdx;
+                  {[
+                    { label: "Plan", idx: 1 },
+                    { label: "Route", idx: 2 },
+                    { label: "App Ack", idx: 3 },
+                    { label: "Exec", idx: 4 },
+                    { label: "Done", idx: 5 },
+                  ].map((s) => {
+                    const isDone = s.idx <= stepIdx;
                     return (
                       <div
-                        key={`step-${idx}`}
+                        key={`step-${s.idx}`}
                         className="flex-1 flex flex-col gap-1"
                       >
                         <div
@@ -166,13 +215,13 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                           }`}
                         />
                         <span
-                          className={`text-[9px] text-center font-medium ${
+                          className={`text-[8px] sm:text-[9px] text-center font-medium ${
                             isDone
                               ? "text-[#0071E3] dark:text-[#2997FF] font-semibold"
                               : "text-[#86868B]"
                           }`}
                         >
-                          {step}
+                          {s.label}
                         </span>
                       </div>
                     );
@@ -207,16 +256,36 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                   ))}
                 </div>
 
-                {/* Submitted / Updated At */}
-                {order.submittedAtUtc && (
-                  <div className="flex items-center justify-between text-[10px] font-mono text-[#86868B] pt-1.5 border-t border-black/[0.03] dark:border-white/[0.05]">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      <span>Submitted</span>
-                    </div>
-                    <span>{formatStateAge(order.submittedAtUtc)}</span>
+                {/* Bottom Bar: Age & Quick Actions */}
+                <div className="flex items-center justify-between text-[10px] font-mono text-[#86868B] pt-1.5 border-t border-black/[0.03] dark:border-white/[0.05]">
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    <span>
+                      {order.submittedAtUtc
+                        ? formatStateAge(order.submittedAtUtc)
+                        : "Active"}
+                    </span>
                   </div>
-                )}
+
+                  {order.state !== "Cancelled" &&
+                    order.state !== "Completed" && (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActionDialogTarget({
+                              operation: "CANCEL_ORDER",
+                              order,
+                            });
+                          }}
+                          className="text-[#D70015] dark:text-[#FF453A] hover:underline"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                </div>
               </div>
             );
           })

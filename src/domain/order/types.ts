@@ -1,5 +1,5 @@
 /**
- * Typed domain models for Order state and lifecycle.
+ * Typed domain models for Order state, lifecycle, assignments, and audit timeline.
  */
 
 export type OrderLifecycleState =
@@ -22,6 +22,18 @@ export interface OrderAssignment {
   goalRow: number;
 }
 
+export interface OrderTimelineEntry {
+  id: string;
+  state: OrderLifecycleState;
+  occurredAtUtc: string;
+  orderUpdateId: number;
+  planRevisionId?: string;
+  actor?: "Operator" | "Core MAPF" | "Simulator";
+  detail?: string;
+  isApplicationAck?: boolean;
+  isExecutionReport?: boolean;
+}
+
 export interface Order {
   id: string;
   entityVersion: number;
@@ -34,4 +46,5 @@ export interface Order {
   mapRevision?: number;
   submittedAtUtc?: string;
   updatedAtUtc?: string;
+  timeline?: OrderTimelineEntry[];
 }

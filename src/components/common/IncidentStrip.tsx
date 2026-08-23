@@ -1,15 +1,26 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
-import { ShieldAlert, AlertTriangle, WifiOff, Info, X } from "lucide-react";
+import {
+  ShieldAlert,
+  AlertTriangle,
+  WifiOff,
+  Info,
+  X,
+  ChevronRight,
+} from "lucide-react";
 import { formatStateAge } from "../../utils/time/time.ts";
 
 export const IncidentStrip: React.FC = () => {
   const { t } = useAppConfig();
-  const { snapshot, diagnostics, connectionState } = useOperations();
+  const { snapshot, diagnostics, connectionState, setIsIncidentCenterOpen } =
+    useOperations();
   const [isDismissed, setIsDismissed] = useState<boolean>(false);
 
   const robots = snapshot?.robots || [];
+  const incidents = snapshot?.incidents || [];
+  const activeIncidents = incidents.filter((i) => i.status === "ACTIVE");
+
   const safetyRobots = robots.filter(
     (r) => r.safety !== "NORMAL" && r.safety !== "WAIT",
   );
@@ -26,6 +37,7 @@ export const IncidentStrip: React.FC = () => {
     diagnostics.conflictCount > 0 && diagnostics.lastDecision === "CONFLICT";
 
   const hasIncidents =
+    activeIncidents.length > 0 ||
     safetyRobots.length > 0 ||
     disconnectedRobots.length > 0 ||
     isStale ||
@@ -35,7 +47,7 @@ export const IncidentStrip: React.FC = () => {
     hasConflict;
 
   // Generate a composite signature of active incident state so that new incidents un-dismiss the banner
-  const incidentSignature = `${safetyRobots.length}-${disconnectedRobots.length}-${freshness}-${diagnostics.gapCount}-${diagnostics.conflictCount}`;
+  const incidentSignature = `${activeIncidents.length}-${safetyRobots.length}-${disconnectedRobots.length}-${freshness}-${diagnostics.gapCount}-${diagnostics.conflictCount}`;
 
   useEffect(() => {
     setIsDismissed(false);
@@ -77,8 +89,23 @@ export const IncidentStrip: React.FC = () => {
       className="fixed top-16 sm:top-18 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-1.5rem)] sm:w-[calc(100%-3rem)] max-w-[1920px] pointer-events-none transition-all duration-300 ease-out animate-fade-in"
     >
       <div className="pointer-events-auto bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-[#FF9500]/30 dark:border-[#FF9F0A]/35 shadow-2xl rounded-2xl p-2 sm:px-3.5 sm:py-2 flex items-center justify-between gap-2.5 text-[#C93400] dark:text-[#FF9F0A] text-xs ring-1 ring-black/5 dark:ring-white/10 overflow-hidden">
-        {/* Left: Responsive Alert Badges */}
-        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-hidden">
+        {/* Left: Clickable Alert Strip that opens Incident Center */}
+        <div
+          onClick={() => setIsIncidentCenterOpen(true)}
+          className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-hidden cursor-pointer group"
+          title="Click to open Persistent Incident Center"
+        >
+          {/* Active Incidents Badge */}
+          {activeIncidents.length > 0 && (
+            <div className="flex items-center gap-1.5 font-bold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 px-2.5 py-1 rounded-xl max-w-full truncate shrink-0">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                {activeIncidents.length} Active Incident
+                {activeIncidents.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
+
           {/* Safety Alert */}
           {safetyRobots.length > 0 && (
             <div
@@ -148,18 +175,29 @@ export const IncidentStrip: React.FC = () => {
               <span>{t("incidentPartialWarning")}</span>
             </div>
           )}
+
+          <ChevronRight className="w-3.5 h-3.5 text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-[#F5F5F7] transition-colors shrink-0" />
         </div>
 
-        {/* Right: Status Pill & Close Button */}
+        {/* Right: Status Pill & Dismiss Button */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
+          <button
+            type="button"
+            onClick={() => setIsIncidentCenterOpen(true)}
+            className="text-[11px] font-mono font-bold text-[#0071E3] dark:text-[#2997FF] hover:underline shrink-0 hidden sm:inline"
+          >
+            Incident Center →
+          </button>
+
           <div className="text-[11px] font-mono opacity-90 px-2 py-0.5 rounded-lg bg-black/5 dark:bg-white/10 shrink-0">
             <span className="font-bold uppercase">{freshness}</span>
           </div>
+
           <button
             onClick={() => setIsDismissed(true)}
             className="p-1 sm:p-1.5 rounded-lg text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer shrink-0"
-            title="Dismiss notification"
-            aria-label="Dismiss notification"
+            title="Dismiss banner (Incidents remain in Incident Center)"
+            aria-label="Dismiss banner"
           >
             <X className="w-3.5 h-3.5" />
           </button>

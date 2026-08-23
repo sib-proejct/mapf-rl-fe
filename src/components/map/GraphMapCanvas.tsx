@@ -17,6 +17,7 @@ import {
   Package,
   X,
   Copy,
+  Check,
   Boxes,
 } from "lucide-react";
 import {
