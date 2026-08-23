@@ -38,6 +38,7 @@ export const OrderInspector: React.FC<OrderInspectorProps> = ({
     selectedOrder,
     setSelectedRobotId,
     setActionDialogTarget,
+    transportMode,
   } = useOperations();
 
   const [copiedId, setCopiedId] = useState<boolean>(false);
@@ -265,26 +266,38 @@ export const OrderInspector: React.FC<OrderInspectorProps> = ({
             <>
               <button
                 type="button"
+                disabled={transportMode !== "FIXTURE_STREAM"}
+                title={
+                  transportMode !== "FIXTURE_STREAM"
+                    ? "Disabled until Core exposes an authoritative cancel endpoint"
+                    : undefined
+                }
                 onClick={() =>
                   setActionDialogTarget({
                     operation: "CANCEL_ORDER",
                     order: selectedOrder,
                   })
                 }
-                className="flex-1 py-2 px-3 rounded-xl bg-[#FF3B30]/10 hover:bg-[#FF3B30]/20 text-[#D70015] dark:text-[#FF453A] font-semibold text-xs transition-colors border border-[#FF3B30]/20 cursor-pointer text-center"
+                className="flex-1 py-2 px-3 rounded-xl bg-[#FF3B30]/10 hover:bg-[#FF3B30]/20 text-[#D70015] dark:text-[#FF453A] font-semibold text-xs transition-colors border border-[#FF3B30]/20 cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {t("actionCancelTitle")}
               </button>
 
               <button
                 type="button"
+                disabled={transportMode !== "FIXTURE_STREAM"}
+                title={
+                  transportMode !== "FIXTURE_STREAM"
+                    ? "Disabled until Core exposes an authoritative reassign endpoint"
+                    : undefined
+                }
                 onClick={() =>
                   setActionDialogTarget({
                     operation: "REASSIGN_ORDER",
                     order: selectedOrder,
                   })
                 }
-                className="flex-1 py-2 px-3 rounded-xl bg-[#0071E3]/10 hover:bg-[#0071E3]/20 text-[#0071E3] dark:text-[#2997FF] font-semibold text-xs transition-colors border border-[#0071E3]/20 cursor-pointer text-center"
+                className="flex-1 py-2 px-3 rounded-xl bg-[#0071E3]/10 hover:bg-[#0071E3]/20 text-[#0071E3] dark:text-[#2997FF] font-semibold text-xs transition-colors border border-[#0071E3]/20 cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {t("actionReassignTitle")}
               </button>

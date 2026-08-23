@@ -32,10 +32,6 @@ export const OrderCreateModal: React.FC = () => {
   const [goalColumn, setGoalColumn] = useState<number>(14);
   const [goalRow, setGoalRow] = useState<number>(8);
   const [selectedRobotId, setSelectedRobotId] = useState<string>("auto");
-  const [priority, setPriority] = useState<"NORMAL" | "HIGH" | "CRITICAL">(
-    "NORMAL",
-  );
-  const [notes, setNotes] = useState<string>("");
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [lastMutation, setLastMutation] = useState<PendingMutation | null>(
@@ -72,10 +68,23 @@ export const OrderCreateModal: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const assignedRobot = selectedRobotId === "auto" ? "" : selectedRobotId;
+      if (!map) {
+        throw new Error("An authoritative Core map is required for this Order");
+      }
+      const assignedRobot =
+        selectedRobotId === "auto"
+          ? robots.find(
+              (robot) =>
+                robot.operationalState === "IDLE" &&
+                robot.connectivity === "CONNECTED",
+            )?.id
+          : selectedRobotId;
+      if (!assignedRobot) {
+        throw new Error("No connected idle robot is available for this Order");
+      }
       const mutation = await createOrder({
-        mapId: map?.mapId || "00000000-0000-4000-8000-000000000001",
-        mapRevision: map?.revision ?? 0,
+        mapId: map.mapId,
+        mapRevision: map.revision,
         assignments: [
           {
             robotId: assignedRobot,
@@ -83,8 +92,6 @@ export const OrderCreateModal: React.FC = () => {
             goalRow: Number(goalRow),
           },
         ],
-        priority,
-        notes,
       });
 
       setLastMutation(mutation);
@@ -282,7 +289,7 @@ export const OrderCreateModal: React.FC = () => {
                         {t("orderAutoAssign")}
                       </div>
                       <div className="text-[10px] text-[#86868B]">
-                        Optimal shortest-path makespan heuristic
+                        Select the first connected idle robot required by Core
                       </div>
                     </div>
                   </div>
@@ -307,7 +314,8 @@ export const OrderCreateModal: React.FC = () => {
                       <button
                         key={`robot-choice-${robot.id}`}
                         type="button"
-                        onClick={() => setSelectedRobotId(robot.id)}
+                        onClick={() => isAvail && setSelectedRobotId(robot.id)}
+                        disabled={!isAvail}
                         className={`p-2.5 rounded-xl border text-left text-xs transition-all flex items-center justify-between ${
                           isSelected
                             ? "bg-[#0071E3]/10 dark:bg-[#2997FF]/15 border-[#0071E3] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
@@ -335,47 +343,16 @@ export const OrderCreateModal: React.FC = () => {
             </div>
           )}
 
-          {/* STEP 3: Priority & Constraints */}
+          {/* STEP 3: Core-owned planning constraints */}
           {step === 3 && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] mb-2">
-                  {t("orderPriority")}
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { val: "NORMAL", label: t("orderPriorityNormal") },
-                    { val: "HIGH", label: t("orderPriorityHigh") },
-                    { val: "CRITICAL", label: t("orderPriorityCritical") },
-                  ].map((p) => (
-                    <button
-                      key={`prio-${p.val}`}
-                      type="button"
-                      onClick={() => setPriority(p.val as any)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
-                        priority === p.val
-                          ? "bg-[#0071E3] dark:bg-[#2997FF] text-white border-transparent shadow-xs"
-                          : "bg-[#F5F5F7] dark:bg-[#252528] border-black/[0.04] dark:border-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7]"
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] mb-1">
-                  {t("orderNotes")}
-                </label>
-                <textarea
-                  rows={3}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder={t("orderNotesPlaceholder")}
-                  className="w-full px-3 py-2 rounded-xl bg-[#F5F5F7] dark:bg-[#252528] border border-black/[0.06] dark:border-white/[0.08] text-xs text-[#1D1D1F] dark:text-[#F5F5F7] outline-none focus:ring-2 focus:ring-[#0071E3]"
-                />
-              </div>
+            <div className="p-4 rounded-2xl bg-[#F5F5F7] dark:bg-[#252528] text-xs text-[#86868B] space-y-2">
+              <p className="font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                Core owns route priority and safety constraints
+              </p>
+              <p>
+                This client sends only the versioned map, robot assignment, and
+                goal accepted by the Core OpenAPI contract.
+              </p>
             </div>
           )}
 
@@ -394,15 +371,15 @@ export const OrderCreateModal: React.FC = () => {
                   <span className="text-[#86868B]">Assigned Unit</span>
                   <span className="font-mono font-bold text-[#0071E3] dark:text-[#2997FF]">
                     {selectedRobotId === "auto"
-                      ? "Core Auto Allocation"
+                      ? "First connected idle robot"
                       : selectedRobotId}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs pb-2 border-b border-black/[0.04] dark:border-white/[0.06]">
-                  <span className="text-[#86868B]">Priority Level</span>
+                  <span className="text-[#86868B]">Planning authority</span>
                   <span className="font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                    {priority}
+                    Core
                   </span>
                 </div>
 

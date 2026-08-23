@@ -26,12 +26,13 @@ export interface CreateOrderAssignmentInput {
 }
 
 export interface CreateOrderRequest {
+  requestId: string;
   mapId: string;
   mapRevision: number;
   assignments: CreateOrderAssignmentInput[];
-  priority?: "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
-  notes?: string;
 }
+
+export type CreateOrderInput = Omit<CreateOrderRequest, "requestId">;
 
 export interface CancelOrderRequest {
   orderId: string;

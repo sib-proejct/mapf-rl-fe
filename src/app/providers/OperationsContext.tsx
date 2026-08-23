@@ -21,7 +21,7 @@ import type {
 } from "../../domain/event/types.ts";
 import type {
   PendingMutation,
-  CreateOrderRequest,
+  CreateOrderInput,
   CancelOrderRequest,
   ReassignOrderRequest,
   InstantActionRequest,
@@ -123,7 +123,7 @@ export interface OperationsContextType {
   // Phase 3 Mutation & Incident state and actions
   pendingMutations: PendingMutation[];
   createOrder: (
-    req: CreateOrderRequest,
+    req: CreateOrderInput,
     options?: { timeoutMs?: number },
   ) => Promise<PendingMutation>;
   cancelOrder: (
@@ -521,7 +521,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const createOrder = useCallback(
     async (
-      req: CreateOrderRequest,
+      req: CreateOrderInput,
       options?: { timeoutMs?: number; forcedRequestId?: string },
     ): Promise<PendingMutation> => {
       const mut = globalMutationManager.startMutation(
@@ -883,7 +883,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (existing.operation === "CREATE_ORDER") {
-        return createOrder(existing.payload as unknown as CreateOrderRequest, {
+        return createOrder(existing.payload as unknown as CreateOrderInput, {
           forcedRequestId: requestId,
         });
       } else if (existing.operation === "CANCEL_ORDER") {

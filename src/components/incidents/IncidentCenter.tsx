@@ -46,6 +46,7 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
     setActionDialogTarget,
     acknowledgeIncident,
     resolveIncident,
+    transportMode,
   } = useOperations();
 
   const [filterStatus, setFilterStatus] = useState<string>("ACTIVE");
@@ -273,6 +274,12 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
                     {inc.status === "ACTIVE" && (
                       <button
                         type="button"
+                        disabled={transportMode !== "FIXTURE_STREAM"}
+                        title={
+                          transportMode !== "FIXTURE_STREAM"
+                            ? "Disabled until Core exposes an authoritative incident action endpoint"
+                            : undefined
+                        }
                         onClick={(e) => {
                           e.stopPropagation();
                           acknowledgeIncident({
@@ -280,7 +287,7 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
                             action: "ACKNOWLEDGE",
                           });
                         }}
-                        className="px-2.5 py-1 rounded-xl bg-black/5 dark:bg-white/10 text-[#1D1D1F] dark:text-[#F5F5F7] text-[10px] font-semibold hover:bg-black/10 transition-colors"
+                        className="px-2.5 py-1 rounded-xl bg-black/5 dark:bg-white/10 text-[#1D1D1F] dark:text-[#F5F5F7] text-[10px] font-semibold hover:bg-black/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {t("incidentActionAck")}
                       </button>
@@ -289,6 +296,12 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
                     {inc.status !== "RESOLVED" && (
                       <button
                         type="button"
+                        disabled={transportMode !== "FIXTURE_STREAM"}
+                        title={
+                          transportMode !== "FIXTURE_STREAM"
+                            ? "Disabled until Core exposes an authoritative incident action endpoint"
+                            : undefined
+                        }
                         onClick={(e) => {
                           e.stopPropagation();
                           resolveIncident({
@@ -296,7 +309,7 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
                             action: "RESOLVE",
                           });
                         }}
-                        className="px-2.5 py-1 rounded-xl bg-[#34C759]/15 text-[#248A3D] dark:text-[#30D158] border border-[#34C759]/30 text-[10px] font-semibold hover:bg-[#34C759]/25 transition-colors"
+                        className="px-2.5 py-1 rounded-xl bg-[#34C759]/15 text-[#248A3D] dark:text-[#30D158] border border-[#34C759]/30 text-[10px] font-semibold hover:bg-[#34C759]/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {t("incidentActionResolve")}
                       </button>

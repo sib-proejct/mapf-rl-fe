@@ -1,7 +1,5 @@
-import {
-  NormalizedProblem,
-  normalizeProblem,
-} from "../../contracts/adapters/problem.ts";
+import { normalizeProblem } from "../../contracts/adapters/problem.ts";
+import type { NormalizedProblem } from "../../contracts/adapters/problem.ts";
 import type {
   CreateOrderRequest,
   CancelOrderRequest,
@@ -37,6 +35,21 @@ export interface MutationRequestOptions {
   timeoutMs?: number;
 }
 
+type CsrfTokenProvider = () => string | null;
+
+function browserCsrfToken(): string | null {
+  if (typeof document === "undefined") return null;
+  const meta = document.querySelector<HTMLMetaElement>(
+    'meta[name="mapf-csrf-token"]',
+  );
+  if (meta?.content) return meta.content;
+  const cookie = document.cookie
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith("mapf_csrf="));
+  return cookie ? decodeURIComponent(cookie.slice("mapf_csrf=".length)) : null;
+}
+
 /**
  * Versioned REST API client for MAPF-RL Core /api/v1.
  * Uses same-origin BFF and HttpOnly session cookies.
@@ -44,9 +57,14 @@ export interface MutationRequestOptions {
  */
 export class CoreApiClient {
   private readonly baseUrl: string;
+  private readonly csrfTokenProvider: CsrfTokenProvider;
 
-  constructor(baseUrl: string = "") {
+  constructor(
+    baseUrl: string = "",
+    csrfTokenProvider: CsrfTokenProvider = browserCsrfToken,
+  ) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
+    this.csrfTokenProvider = csrfTokenProvider;
   }
 
   /**
@@ -101,10 +119,14 @@ export class CoreApiClient {
    * Submits a new dispatch order intent with UUIDv4 requestId.
    */
   async createOrder(
-    payload: CreateOrderRequest,
+    payload: Omit<CreateOrderRequest, "requestId">,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
-    return this.postMutation(`${this.baseUrl}/api/v1/orders`, payload, options);
+    return this.postMutation(
+      `${this.baseUrl}/api/v1/orders`,
+      { ...payload, requestId: options.requestId } satisfies CreateOrderRequest,
+      options,
+    );
   }
 
   /**
@@ -114,11 +136,7 @@ export class CoreApiClient {
     payload: CancelOrderRequest,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
-    return this.postMutation(
-      `${this.baseUrl}/api/v1/orders/${encodeURIComponent(payload.orderId)}/cancel`,
-      payload,
-      options,
-    );
+    return this.unsupportedMutation("CANCEL_ORDER", options.requestId);
   }
 
   /**
@@ -128,11 +146,7 @@ export class CoreApiClient {
     payload: ReassignOrderRequest,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
-    return this.postMutation(
-      `${this.baseUrl}/api/v1/orders/${encodeURIComponent(payload.orderId)}/reassign`,
-      payload,
-      options,
-    );
+    return this.unsupportedMutation("REASSIGN_ORDER", options.requestId);
   }
 
   /**
@@ -142,11 +156,7 @@ export class CoreApiClient {
     payload: InstantActionRequest,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
-    return this.postMutation(
-      `${this.baseUrl}/api/v1/robots/${encodeURIComponent(payload.robotId)}/instant-action`,
-      payload,
-      options,
-    );
+    return this.unsupportedMutation("INSTANT_ACTION", options.requestId);
   }
 
   /**
@@ -156,11 +166,7 @@ export class CoreApiClient {
     payload: IncidentActionRequest,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
-    return this.postMutation(
-      `${this.baseUrl}/api/v1/incidents/${encodeURIComponent(payload.incidentId)}/acknowledge`,
-      payload,
-      options,
-    );
+    return this.unsupportedMutation("ACKNOWLEDGE_INCIDENT", options.requestId);
   }
 
   /**
@@ -170,10 +176,23 @@ export class CoreApiClient {
     payload: IncidentActionRequest,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
-    return this.postMutation(
-      `${this.baseUrl}/api/v1/incidents/${encodeURIComponent(payload.incidentId)}/resolve`,
-      payload,
-      options,
+    return this.unsupportedMutation("RESOLVE_INCIDENT", options.requestId);
+  }
+
+  private async unsupportedMutation(
+    operation: string,
+    requestId: string,
+  ): Promise<never> {
+    throw new ProblemError(
+      normalizeProblem({
+        type: "urn:mapf-rl:problem:mutation-not-supported",
+        title: "Mutation is not available",
+        status: 501,
+        code: "MUTATION_NOT_SUPPORTED",
+        requestId,
+        retryable: false,
+        detail: `${operation} is disabled until Core exposes its authoritative endpoint.`,
+      }),
     );
   }
 
@@ -182,10 +201,23 @@ export class CoreApiClient {
     body: unknown,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
+    const csrfToken = this.csrfTokenProvider();
+    if (!csrfToken) {
+      throw new ProblemError(
+        normalizeProblem({
+          type: "urn:mapf-rl:problem:csrf-token-unavailable",
+          title: "CSRF token is unavailable",
+          status: 403,
+          code: "CSRF_TOKEN_UNAVAILABLE",
+          requestId: options.requestId,
+          retryable: false,
+        }),
+      );
+    }
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "application/json, application/problem+json",
-      "X-Request-Id": options.requestId,
+      "X-CSRF-Token": csrfToken,
     };
 
     if (options.correlationId) {
@@ -266,5 +298,5 @@ export class CoreApiClient {
 }
 
 export const defaultApiClient = new CoreApiClient(
-  import.meta.env.VITE_MAPF_CORE_BASE_URL || "",
+  import.meta.env?.VITE_MAPF_CORE_BASE_URL || "",
 );

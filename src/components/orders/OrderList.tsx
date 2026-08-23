@@ -28,6 +28,7 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
     setSelectedRobotId,
     setIsOrderModalOpen,
     setActionDialogTarget,
+    transportMode,
   } = useOperations();
 
   const orders = snapshot?.orders || [];
@@ -272,6 +273,12 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
+                          disabled={transportMode !== "FIXTURE_STREAM"}
+                          title={
+                            transportMode !== "FIXTURE_STREAM"
+                              ? "Disabled until Core exposes an authoritative cancel endpoint"
+                              : undefined
+                          }
                           onClick={(e) => {
                             e.stopPropagation();
                             setActionDialogTarget({
@@ -279,7 +286,7 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                               order,
                             });
                           }}
-                          className="text-[#D70015] dark:text-[#FF453A] hover:underline"
+                          className="text-[#D70015] dark:text-[#FF453A] hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           Cancel
                         </button>
