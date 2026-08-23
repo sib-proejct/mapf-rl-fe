@@ -71,3 +71,17 @@ test("adaptOperationsSnapshot preserves stale and partial freshness states", () 
   const partial = adaptOperationsSnapshot(CANONICAL_PARTIAL_SNAPSHOT_FIXTURE);
   assert.equal(partial.freshness, "PARTIAL");
 });
+
+test("adaptOperationsSnapshot rejects a live snapshot without an authoritative map", () => {
+  const withoutMap = {
+    ...CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
+    entities: CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE.entities.filter(
+      (entity) => entity.entityType !== "MAP",
+    ),
+  };
+
+  assert.throws(
+    () => adaptOperationsSnapshot(withoutMap),
+    /missing a MAP entity/,
+  );
+});

@@ -10,7 +10,6 @@ import type {
   SafetyState,
   ActiveController,
 } from "../robot/types.ts";
-import type { OrderLifecycleState, OrderAssignment } from "../order/types.ts";
 
 export type ConnectionState =
   | "SignedOut"
@@ -98,21 +97,18 @@ export interface RobotEventReportPayload {
 }
 
 export interface OperationsEventPayload {
-  entityType: "ORDER" | "MAP" | "FLEET";
+  entityType:
+    | "MAP"
+    | "ROBOT"
+    | "ORDER"
+    | "INCIDENT"
+    | "PLAN_REVISION"
+    | "POLICY_DEPLOYMENT"
+    | "CONNECTIVITY";
   entityId: string;
-  eventType:
-    | "ORDER_CREATED"
-    | "ORDER_UPDATED"
-    | "ORDER_CANCELLED"
-    | "ORDER_COMPLETED"
-    | "PLAN_REVISED"
-    | "REPLAN_TRIGGERED";
-  orderUpdateId?: number;
-  planRevisionId?: string;
-  state?: OrderLifecycleState;
-  assignments?: OrderAssignment[];
-  reason?: string;
-  occurredAt?: string;
+  entityVersion: number;
+  contentDigestSha256: string;
+  data: Record<string, unknown>;
 }
 
 export type ReconciliationDecision =

@@ -1,162 +1,123 @@
-/**
- * Canonical test fixtures for Phase 2 Realtime Reconciliation.
- */
+/** Fixtures matching the Core-produced `operations.event` envelope. */
 
 import type { StreamEnvelope } from "../../domain/event/types.ts";
 
 export const FIXTURE_BASE_CURSOR_SEQ = 1420;
 
-export const NOMINAL_ROBOT_EVENT_1421: StreamEnvelope = {
-  contractVersion: "1.0.0",
-  messageId: "00000000-0000-4000-8000-000000001421",
-  messageType: "robot.state.report",
-  producer: { kind: "SIMULATOR", id: "sim-01" },
-  occurredAt: "2026-08-22T04:30:00.100Z",
-  correlationId: "corr-1421",
-  eventSequence: 1421,
-  payload: {
-    robotId: "robot-01",
-    stateVersion: 43,
-    simulationTimeMs: 12500,
-    pose: { xMeters: 4.6, yMeters: 2.5, yawRadians: 0.0 },
-    operationalState: "EXECUTING",
-    connectivity: "CONNECTED",
-    safety: "NORMAL",
-    activeController: {
-      mode: "BASELINE",
-      identity: "cardinal-baseline/1.0.0",
-    },
-    batteryPercent: 94,
+const robotData = (
+  stateVersion: number,
+  xMeters: number,
+  overrides: Record<string, unknown> = {},
+) => ({
+  stateVersion,
+  simulationTimeMs: 12400 + (stateVersion - 42) * 100,
+  pose: { xMeters, yMeters: 2.5, yawRadians: 0 },
+  operationalState: "EXECUTING",
+  connectivity: "CONNECTED",
+  freshness: "CURRENT",
+  safety: "NORMAL",
+  activeController: {
+    mode: "BASELINE",
+    identity: "cardinal-baseline/1.0.0",
+    contentDigestSha256: "4".repeat(64),
   },
-};
+  simulatorId: "sim-01",
+  sessionEpoch: 4,
+  batteryPercent: 94,
+  observedAt: "2026-08-22T04:30:00.000Z",
+  ...overrides,
+});
 
-export const NOMINAL_ROBOT_EVENT_1422: StreamEnvelope = {
+const operation = (
+  sequence: number,
+  entityVersion: number,
+  digest: string,
+  data: Record<string, unknown>,
+): StreamEnvelope => ({
   contractVersion: "1.0.0",
-  messageId: "00000000-0000-4000-8000-000000001422",
-  messageType: "robot.state.report",
-  producer: { kind: "SIMULATOR", id: "sim-01" },
-  occurredAt: "2026-08-22T04:30:00.200Z",
-  correlationId: "corr-1422",
-  eventSequence: 1422,
-  payload: {
-    robotId: "robot-01",
-    stateVersion: 44,
-    simulationTimeMs: 12600,
-    pose: { xMeters: 4.7, yMeters: 2.5, yawRadians: 0.0 },
-    operationalState: "EXECUTING",
-    connectivity: "CONNECTED",
-    safety: "NORMAL",
-    activeController: {
-      mode: "BASELINE",
-      identity: "cardinal-baseline/1.0.0",
-    },
-    batteryPercent: 94,
-  },
-};
-
-export const DUPLICATE_STREAM_EVENT_1420: StreamEnvelope = {
-  contractVersion: "1.0.0",
-  messageId: "00000000-0000-4000-8000-000000001420",
-  messageType: "robot.state.report",
-  producer: { kind: "SIMULATOR", id: "sim-01" },
+  messageId: `00000000-0000-4000-8000-${String(sequence).padStart(12, "0")}`,
+  messageType: "operations.event",
+  producer: { kind: "CORE", id: "core-api" },
   occurredAt: "2026-08-22T04:30:00.000Z",
-  correlationId: "corr-1420",
-  eventSequence: 1420,
+  correlationId: `corr-${sequence}`,
+  eventSequence: sequence,
   payload: {
-    robotId: "robot-01",
-    stateVersion: 42,
-    simulationTimeMs: 12400,
-    pose: { xMeters: 4.5, yMeters: 2.5, yawRadians: 0.0 },
-    operationalState: "EXECUTING",
-    connectivity: "CONNECTED",
-    safety: "NORMAL",
-    activeController: {
-      mode: "BASELINE",
-      identity: "cardinal-baseline/1.0.0",
-      contentDigestSha256:
-        "4444444444444444444444444444444444444444444444444444444444444444",
-    },
-    batteryPercent: 94,
+    entityType: "ROBOT",
+    entityId: "robot-01",
+    entityVersion,
+    contentDigestSha256: digest,
+    data,
   },
-};
+});
 
-export const STALE_STREAM_EVENT_1400: StreamEnvelope = {
-  contractVersion: "1.0.0",
-  messageId: "00000000-0000-4000-8000-000000001400",
-  messageType: "robot.state.report",
-  producer: { kind: "SIMULATOR", id: "sim-01" },
-  occurredAt: "2026-08-22T04:20:00.000Z",
-  correlationId: "corr-1400",
-  eventSequence: 1400,
-  payload: {
-    robotId: "robot-01",
-    stateVersion: 10,
+export const NOMINAL_ROBOT_EVENT_1421 = operation(
+  1421,
+  43,
+  "9".repeat(64),
+  robotData(43, 4.6),
+);
+
+export const NOMINAL_ROBOT_EVENT_1422 = operation(
+  1422,
+  44,
+  "a".repeat(64),
+  robotData(44, 4.7),
+);
+
+export const DUPLICATE_STREAM_EVENT_1420 = operation(
+  1420,
+  42,
+  "2".repeat(64),
+  robotData(42, 4.5),
+);
+
+export const STALE_STREAM_EVENT_1400 = operation(
+  1400,
+  10,
+  "b".repeat(64),
+  robotData(10, 1, {
     simulationTimeMs: 5000,
-    pose: { xMeters: 1.0, yMeters: 1.0, yawRadians: 0.0 },
     operationalState: "IDLE",
-    connectivity: "CONNECTED",
-    safety: "NORMAL",
-    activeController: { mode: "BASELINE", identity: "cardinal-baseline/1.0.0" },
     batteryPercent: 99,
-  },
-};
+  }),
+);
 
-export const GAP_STREAM_EVENT_1425: StreamEnvelope = {
-  contractVersion: "1.0.0",
-  messageId: "00000000-0000-4000-8000-000000001425",
-  messageType: "robot.state.report",
-  producer: { kind: "SIMULATOR", id: "sim-01" },
-  occurredAt: "2026-08-22T04:30:00.500Z",
-  correlationId: "corr-1425",
-  eventSequence: 1425,
-  payload: {
-    robotId: "robot-01",
-    stateVersion: 48,
-    simulationTimeMs: 13000,
-    pose: { xMeters: 5.5, yMeters: 2.5, yawRadians: 0.0 },
-    operationalState: "EXECUTING",
-    connectivity: "CONNECTED",
-    safety: "NORMAL",
-    activeController: { mode: "BASELINE", identity: "cardinal-baseline/1.0.0" },
-    batteryPercent: 93,
-  },
-};
+export const GAP_STREAM_EVENT_1425 = operation(
+  1425,
+  48,
+  "c".repeat(64),
+  robotData(48, 5.5),
+);
 
-export const CONFLICT_STREAM_EVENT_1420: StreamEnvelope = {
-  contractVersion: "1.0.0",
-  messageId: "00000000-0000-4000-8000-000000009999",
-  messageType: "robot.state.report",
-  producer: { kind: "SIMULATOR", id: "sim-01" },
-  occurredAt: "2026-08-22T04:30:00.000Z",
-  correlationId: "corr-conflict",
-  eventSequence: 1420,
-  payload: {
-    robotId: "robot-01",
-    stateVersion: 42,
-    simulationTimeMs: 12400,
-    pose: { xMeters: 999.0, yMeters: 999.0, yawRadians: 3.14159 }, // Contradictory coordinates
+export const CONFLICT_STREAM_EVENT_1420 = operation(
+  1420,
+  42,
+  "f".repeat(64),
+  robotData(42, 999, {
+    pose: { xMeters: 999, yMeters: 999, yawRadians: 3.14159 },
     operationalState: "STOPPED",
     connectivity: "DISCONNECTED",
     safety: "FAULT",
-    activeController: { mode: "POLICY", identity: "faulty-policy/1.0" },
     batteryPercent: 0,
-  },
-};
+  }),
+);
 
 export const ORDER_LIFECYCLE_EVENT_1421: StreamEnvelope = {
   contractVersion: "1.0.0",
-  messageId: "00000000-0000-4000-8000-000000001421-order",
+  messageId: "00000000-0000-4000-8000-000000001421",
   messageType: "operations.event",
-  producer: { kind: "CORE", id: "core-01" },
+  producer: { kind: "CORE", id: "core-api" },
   occurredAt: "2026-08-22T04:30:01.000Z",
   correlationId: "corr-order-1421",
   eventSequence: 1421,
   payload: {
     entityType: "ORDER",
     entityId: "order-01",
-    eventType: "ORDER_COMPLETED",
-    orderUpdateId: 1,
-    state: "Completed",
-    occurredAt: "2026-08-22T04:30:01.000Z",
+    entityVersion: 2,
+    contentDigestSha256: "d".repeat(64),
+    data: {
+      state: "Completed",
+      orderUpdateId: 0,
+    },
   },
 };

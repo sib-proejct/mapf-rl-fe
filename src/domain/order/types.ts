@@ -24,6 +24,8 @@ export interface OrderAssignment {
 
 export interface Order {
   id: string;
+  entityVersion: number;
+  contentDigestSha256?: string;
   orderUpdateId: number;
   planRevisionId?: string;
   state: OrderLifecycleState;

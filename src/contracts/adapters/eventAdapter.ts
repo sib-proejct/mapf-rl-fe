@@ -5,9 +5,7 @@
 import type {
   StreamEnvelope,
   StreamMessageType,
-  StreamWelcomePayload,
   RobotStateReportPayload,
-  RobotEventReportPayload,
   OperationsEventPayload,
 } from "../../domain/event/types.ts";
 import { WS_MESSAGE_TYPES } from "../generated.ts";
@@ -107,6 +105,10 @@ export function adaptStreamEnvelope(raw: unknown): StreamEnvelope {
     obj.payload && typeof obj.payload === "object"
       ? (obj.payload as Record<string, unknown>)
       : {};
+
+  if (messageType === "operations.event") {
+    adaptOperationsEvent(payload);
+  }
 
   return {
     contractVersion: "1.0.0",
@@ -251,45 +253,58 @@ export function adaptRobotStateReport(
 export function adaptOperationsEvent(
   payload: Record<string, unknown>,
 ): OperationsEventPayload {
-  const entityType =
-    payload.entityType === "ORDER" ||
-    payload.entityType === "MAP" ||
-    payload.entityType === "FLEET"
-      ? payload.entityType
-      : "ORDER";
-
-  const entityId = String(payload.entityId || payload.orderId || "");
-  const eventType = String(payload.eventType || "ORDER_UPDATED") as any;
-
-  const orderUpdateId =
-    typeof payload.orderUpdateId === "number"
-      ? payload.orderUpdateId
-      : undefined;
-  const planRevisionId =
-    typeof payload.planRevisionId === "string"
-      ? payload.planRevisionId
-      : undefined;
-  const state =
-    typeof payload.state === "string" ? (payload.state as any) : undefined;
-
-  const assignments = Array.isArray(payload.assignments)
-    ? payload.assignments.map((a: any) => ({
-        robotId: String(a.robotId || ""),
-        goalColumn: Number(a.goalColumn) || 0,
-        goalRow: Number(a.goalRow) || 0,
-      }))
-    : undefined;
+  const entityTypes: OperationsEventPayload["entityType"][] = [
+    "MAP",
+    "ROBOT",
+    "ORDER",
+    "INCIDENT",
+    "PLAN_REVISION",
+    "POLICY_DEPLOYMENT",
+    "CONNECTIVITY",
+  ];
+  if (!entityTypes.includes(payload.entityType as any)) {
+    throw new EventValidationError(
+      `Unknown operations entityType: "${payload.entityType}"`,
+      "UNKNOWN_OPERATIONS_ENTITY_TYPE",
+    );
+  }
+  if (typeof payload.entityId !== "string" || !payload.entityId) {
+    throw new EventValidationError(
+      "Missing operations entityId",
+      "MISSING_OPERATIONS_ENTITY_ID",
+    );
+  }
+  if (
+    typeof payload.entityVersion !== "number" ||
+    !Number.isSafeInteger(payload.entityVersion) ||
+    payload.entityVersion < 0
+  ) {
+    throw new EventValidationError(
+      "Invalid operations entityVersion",
+      "INVALID_OPERATIONS_ENTITY_VERSION",
+    );
+  }
+  if (
+    typeof payload.contentDigestSha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(payload.contentDigestSha256)
+  ) {
+    throw new EventValidationError(
+      "Invalid operations content digest",
+      "INVALID_OPERATIONS_CONTENT_DIGEST",
+    );
+  }
+  if (!payload.data || typeof payload.data !== "object") {
+    throw new EventValidationError(
+      "Missing operations entity data",
+      "MISSING_OPERATIONS_DATA",
+    );
+  }
 
   return {
-    entityType,
-    entityId,
-    eventType,
-    orderUpdateId,
-    planRevisionId,
-    state,
-    assignments,
-    reason: typeof payload.reason === "string" ? payload.reason : undefined,
-    occurredAt:
-      typeof payload.occurredAt === "string" ? payload.occurredAt : undefined,
+    entityType: payload.entityType as OperationsEventPayload["entityType"],
+    entityId: payload.entityId,
+    entityVersion: payload.entityVersion,
+    contentDigestSha256: payload.contentDigestSha256,
+    data: payload.data as Record<string, unknown>,
   };
 }

@@ -36,6 +36,7 @@ export interface ActiveController {
 
 export interface Robot {
   id: string;
+  contentDigestSha256?: string;
   stateVersion: number;
   simulationTimeMs: number;
   occurredAtUtc: string;

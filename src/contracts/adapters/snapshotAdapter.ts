@@ -48,7 +48,7 @@ export const DEFAULT_CANONICAL_MAP: RasterMap = {
  */
 export function adaptOperationsSnapshot(
   raw: unknown,
-  fallbackMap: RasterMap = DEFAULT_CANONICAL_MAP,
+  fallbackMap?: RasterMap,
 ): AuthoritativeSnapshot {
   if (!raw || typeof raw !== "object") {
     throw new Error("Invalid snapshot payload: expected non-null object");
@@ -90,26 +90,43 @@ export function adaptOperationsSnapshot(
     ? (freshnessRaw as SnapshotFreshness)
     : "CURRENT";
 
-  let currentMap = fallbackMap;
+  let currentMap: RasterMap | null = fallbackMap || null;
   const robots: Robot[] = [];
   const orders: Order[] = [];
+  const entityVersions: AuthoritativeSnapshot["entityVersions"] = {};
+  const connectivityBySimulator = new Map<
+    string,
+    { state: string; sessionEpoch: number }
+  >();
 
   const entities = Array.isArray(obj.entities) ? obj.entities : [];
 
   for (const entity of entities) {
     if (!entity || typeof entity !== "object") continue;
-    const { entityType, entityId, entityVersion, data } = entity;
+    const { entityType, entityId, entityVersion, contentDigestSha256, data } =
+      entity;
     const payload = (data && typeof data === "object" ? data : {}) as Record<
       string,
       unknown
     >;
+    if (
+      typeof entityType !== "string" ||
+      typeof entityId !== "string" ||
+      typeof entityVersion !== "number" ||
+      !Number.isSafeInteger(entityVersion) ||
+      entityVersion < 0 ||
+      typeof contentDigestSha256 !== "string" ||
+      !/^[0-9a-f]{64}$/.test(contentDigestSha256)
+    ) {
+      throw new Error("Invalid authoritative snapshot entity envelope");
+    }
+    entityVersions[`${entityType}:${entityId}`] = {
+      version: entityVersion,
+      contentDigestSha256,
+    };
 
     if (entityType === "MAP") {
-      try {
-        currentMap = adaptRasterMap(payload);
-      } catch (err) {
-        console.warn("Failed to parse map entity in snapshot:", err);
-      }
+      currentMap = adaptRasterMap(payload);
     } else if (entityType === "ROBOT") {
       const poseRaw =
         (payload.pose as {
@@ -184,6 +201,7 @@ export function adaptOperationsSnapshot(
 
       robots.push({
         id: String(entityId || `robot-${robots.length + 1}`),
+        contentDigestSha256,
         stateVersion:
           typeof entityVersion === "number"
             ? entityVersion
@@ -250,6 +268,8 @@ export function adaptOperationsSnapshot(
 
       orders.push({
         id: String(entityId || `order-${orders.length + 1}`),
+        entityVersion,
+        contentDigestSha256,
         orderUpdateId:
           typeof payload.orderUpdateId === "number"
             ? payload.orderUpdateId
@@ -262,11 +282,18 @@ export function adaptOperationsSnapshot(
             : undefined,
         state,
         assignments,
-        mapId: typeof payload.mapId === "string" ? payload.mapId : undefined,
+        mapId:
+          typeof payload.mapId === "string"
+            ? payload.mapId
+            : typeof (payload.map as any)?.mapId === "string"
+              ? (payload.map as any).mapId
+              : undefined,
         mapRevision:
           typeof payload.mapRevision === "number"
             ? payload.mapRevision
-            : undefined,
+            : typeof (payload.map as any)?.revision === "number"
+              ? (payload.map as any).revision
+              : undefined,
         submittedAtUtc:
           typeof payload.submittedAt === "string"
             ? payload.submittedAt
@@ -276,6 +303,32 @@ export function adaptOperationsSnapshot(
             ? payload.updatedAt
             : snapshotAt,
       });
+    } else if (entityType === "CONNECTIVITY") {
+      connectivityBySimulator.set(entityId, {
+        state: String(payload.state || "NotReady"),
+        sessionEpoch:
+          typeof payload.sessionEpoch === "number" ? payload.sessionEpoch : 0,
+      });
+    }
+  }
+
+  if (!currentMap) {
+    throw new Error("Authoritative snapshot is missing a MAP entity");
+  }
+
+  for (const robot of robots) {
+    if (!robot.simulatorId) continue;
+    const connectivity = connectivityBySimulator.get(robot.simulatorId);
+    if (!connectivity) continue;
+    robot.sessionEpoch = connectivity.sessionEpoch;
+    robot.connectivity =
+      connectivity.state === "Synchronized"
+        ? "CONNECTED"
+        : connectivity.state === "Degraded"
+          ? "DISCONNECTED"
+          : "DEGRADED";
+    if (robot.connectivity !== "CONNECTED") {
+      robot.freshness = "STALE";
     }
   }
 
@@ -287,6 +340,7 @@ export function adaptOperationsSnapshot(
       eventSequence,
     },
     freshness,
+    entityVersions,
     map: currentMap,
     robots,
     orders,

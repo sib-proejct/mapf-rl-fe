@@ -133,6 +133,7 @@ export function generateStressSnapshot(
 
       orders.push({
         id: orderId,
+        entityVersion: 1,
         orderUpdateId: 0,
         state: "Executing",
         submittedAtUtc: new Date().toISOString(),
@@ -155,6 +156,30 @@ export function generateStressSnapshot(
       eventSequence: 1000 + count,
     },
     freshness: "CURRENT",
+    entityVersions: {
+      [`MAP:${baseMap.mapId}`]: {
+        version: baseMap.revision,
+        contentDigestSha256: baseMap.contentDigestSha256,
+      },
+      ...Object.fromEntries(
+        robots.map((robot) => [
+          `ROBOT:${robot.id}`,
+          {
+            version: robot.stateVersion,
+            contentDigestSha256: robot.contentDigestSha256 || "0".repeat(64),
+          },
+        ]),
+      ),
+      ...Object.fromEntries(
+        orders.map((order) => [
+          `ORDER:${order.id}`,
+          {
+            version: order.entityVersion,
+            contentDigestSha256: order.contentDigestSha256 || "0".repeat(64),
+          },
+        ]),
+      ),
+    },
     map: baseMap,
     robots,
     orders,

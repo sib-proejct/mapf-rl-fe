@@ -14,11 +14,17 @@ export interface StreamCursor {
   eventSequence: number;
 }
 
+export interface EntityVersion {
+  version: number;
+  contentDigestSha256: string;
+}
+
 export interface AuthoritativeSnapshot {
   contractVersion: "1.0.0";
   snapshotAt: string;
   cursor: StreamCursor;
   freshness: SnapshotFreshness;
+  entityVersions: Record<string, EntityVersion>;
   map: RasterMap;
   robots: Robot[];
   orders: Order[];
