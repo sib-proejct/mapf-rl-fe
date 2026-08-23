@@ -11,14 +11,12 @@ import {
   formatDistanceMeters,
 } from "../../utils/units/units.ts";
 import { getNodeTypeUiMeta } from "../../utils/map/topology.ts";
+import { MapCanvasHeader } from "./MapCanvasHeader.tsx";
 import {
   Bot,
   AlertTriangle,
   Wifi,
   WifiOff,
-  Grid,
-  Network,
-  Table,
   Search,
   Boxes,
   ArrowRight,
@@ -428,117 +426,57 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
       className="apple-card h-full min-h-[400px] overflow-hidden flex flex-col transition-colors duration-300 select-none"
     >
       {/* 1. Top Glassmorphic Controls Toolbar */}
-      <div className="shrink-0 p-3 sm:px-4 sm:py-2.5 flex flex-wrap items-center justify-between gap-2.5 border-b border-black/[0.05] dark:border-white/[0.06] bg-white/70 dark:bg-[#1C1C1E]/70 backdrop-blur-md z-10">
-        {/* Left: Viewport Info & Mode Switcher */}
-        <div className="flex items-center gap-2.5 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] flex-wrap">
-          {headerLeft}
-          {headerLeft && (
-            <div className="h-4 w-[1px] bg-black/10 dark:bg-white/15 hidden sm:block" />
-          )}
+      <MapCanvasHeader
+        viewMode={viewMode}
+        onToggleViewMode={onToggleViewMode}
+        headerLeft={headerLeft}
+        headerRight={headerRight}
+      >
+        {/* Table Entity Tabs */}
+        <div className="inline-flex bg-[#F2F4F6] dark:bg-[#252528] p-1 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] items-center gap-0.5 text-xs">
+          <button
+            onClick={() => setActiveTab("robots")}
+            className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "robots"
+                ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
+                : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
+            }`}
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span>
+              {t("a11yTabRobots")} ({robots.length})
+            </span>
+          </button>
 
-          {/* Mode Switcher */}
-          {onToggleViewMode && (
-            <div className="inline-flex bg-[#F2F4F6] dark:bg-[#252528] p-1 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] items-center gap-0.5 text-xs">
-              <button
-                onClick={() => onToggleViewMode("canvas")}
-                className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === "canvas"
-                    ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                    : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-                }`}
-                title={t("mapCanvasView")}
-              >
-                <Grid className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">2D Canvas (Fast)</span>
-              </button>
+          <button
+            onClick={() => setActiveTab("nodes")}
+            className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "nodes"
+                ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
+                : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
+            }`}
+          >
+            <Boxes className="w-3.5 h-3.5" />
+            <span>
+              {t("a11yTabNodes")} ({topology?.nodes.length || 0})
+            </span>
+          </button>
 
-              <button
-                onClick={() => onToggleViewMode("graph")}
-                className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === "graph"
-                    ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                    : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-                }`}
-                title={t("mapGraphView")}
-              >
-                <Network className="w-3.5 h-3.5 text-[#34C759] dark:text-[#30D158]" />
-                <span className="hidden sm:inline">Graph Topology</span>
-              </button>
-
-              <button
-                onClick={() => onToggleViewMode("accessible")}
-                className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === "accessible"
-                    ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                    : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-                }`}
-                title={t("mapAccessibleView")}
-              >
-                <Table className="w-3.5 h-3.5 text-[#FF9F0A]" />
-                <span className="hidden sm:inline">Table View</span>
-              </button>
-            </div>
-          )}
-
-          <span className="text-[#D2D2D7] dark:text-[#3A3A3C] hidden lg:inline">
-            |
-          </span>
-          <span className="font-mono text-[11px] text-[#86868B] tabular-nums hidden lg:inline">
-            {widthCells}×{heightCells} cells ({formatDistanceMeters(resolution)}
-            /cell) · {blockedCount} Blocked · {traversableCount} Open
-          </span>
+          <button
+            onClick={() => setActiveTab("edges")}
+            className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "edges"
+                ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
+                : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
+            }`}
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5" />
+            <span>
+              {t("a11yTabEdges")} ({topology?.edges.length || 0})
+            </span>
+          </button>
         </div>
-
-        {/* Right: Tab Navigation Switcher & Header Right */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Table Entity Tabs */}
-          <div className="inline-flex bg-[#F2F4F6] dark:bg-[#252528] p-1 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] items-center gap-0.5 text-xs">
-            <button
-              onClick={() => setActiveTab("robots")}
-              className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === "robots"
-                  ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                  : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-              }`}
-            >
-              <Bot className="w-3.5 h-3.5" />
-              <span>
-                {t("a11yTabRobots")} ({robots.length})
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("nodes")}
-              className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === "nodes"
-                  ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                  : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-              }`}
-            >
-              <Boxes className="w-3.5 h-3.5" />
-              <span>
-                {t("a11yTabNodes")} ({topology?.nodes.length || 0})
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("edges")}
-              className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === "edges"
-                  ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                  : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-              }`}
-            >
-              <ArrowLeftRight className="w-3.5 h-3.5" />
-              <span>
-                {t("a11yTabEdges")} ({topology?.edges.length || 0})
-              </span>
-            </button>
-          </div>
-
-          {headerRight}
-        </div>
-      </div>
+      </MapCanvasHeader>
 
       {/* 2. Secondary Filter & Search Bar */}
       <div className="shrink-0 px-3 sm:px-4 py-2 border-b border-black/[0.05] dark:border-white/[0.06] bg-[#FBFBFD] dark:bg-[#161618] flex flex-wrap items-center justify-between gap-2.5 text-xs">

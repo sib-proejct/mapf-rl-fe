@@ -8,10 +8,6 @@ import React, {
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
 import {
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-  Crosshair,
   Zap,
   ShieldAlert,
   PauseCircle,
@@ -35,6 +31,8 @@ import {
 import { getNodeTypeUiMeta } from "../../utils/map/topology.ts";
 import type { Robot } from "../../domain/robot/types.ts";
 import { copyToClipboard } from "../../utils/ids/ids.ts";
+import { formatDistanceMeters } from "../../utils/units/units.ts";
+import { MapCanvasHeader } from "./MapCanvasHeader.tsx";
 
 export interface FastMapCanvasProps {
   viewMode?: "canvas" | "graph" | "accessible";
@@ -1103,125 +1101,35 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
       className="apple-card flex flex-col h-full min-h-[400px] relative overflow-hidden transition-colors duration-300 select-none"
     >
       {/* Top Apple Glassmorphic Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-3 sm:px-4 sm:py-2.5 border-b border-black/[0.05] dark:border-white/[0.06] bg-white/70 dark:bg-[#1C1C1E]/70 backdrop-blur-md z-10">
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {headerLeft}
-          {headerLeft && onToggleViewMode && (
-            <div className="h-4 w-[1px] bg-black/10 dark:bg-white/15 hidden sm:block" />
-          )}
-
-          {/* Mode Switcher */}
-          {onToggleViewMode && (
-            <div className="inline-flex bg-[#F2F4F6] dark:bg-[#252528] p-1 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] items-center gap-0.5 text-xs">
-              <button
-                onClick={() => onToggleViewMode("canvas")}
-                className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer ${
-                  viewMode === "canvas"
-                    ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                    : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-                }`}
-              >
-                2D Canvas (Fast)
-              </button>
-              <button
-                onClick={() => onToggleViewMode("graph")}
-                className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer ${
-                  viewMode === "graph"
-                    ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                    : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-                }`}
-              >
-                Graph Topology
-              </button>
-              <button
-                onClick={() => onToggleViewMode("accessible")}
-                className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer ${
-                  viewMode === "accessible"
-                    ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                    : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-                }`}
-              >
-                Table View
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Zoom, Pan, Layer Controls & Header Right */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            onClick={() => setZoom((z) => Math.min(z * 1.25, 5))}
-            className="w-7 h-7 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] transition-all"
-            title="Zoom In"
-          >
-            <ZoomIn className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setZoom((z) => Math.max(z * 0.8, 0.3))}
-            className="w-7 h-7 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] transition-all"
-            title="Zoom Out"
-          >
-            <ZoomOut className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={handleResetView}
-            className="w-7 h-7 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] transition-all"
-            title="Reset View"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
-          {selectedRobotId && (
-            <button
-              onClick={handleFocusSelected}
-              className="px-2.5 h-7 rounded-lg bg-[#0071E3]/10 dark:bg-[#2997FF]/15 text-[#0071E3] dark:text-[#2997FF] hover:bg-[#0071E3]/20 flex items-center gap-1 text-[11px] font-medium transition-all"
-              title="Focus Selected Robot"
-            >
-              <Crosshair className="w-3 h-3" />
-              <span>{selectedRobotId}</span>
-            </button>
-          )}
-
-          {/* Layer Toggles */}
-          <div className="h-4 w-[1px] bg-black/10 dark:bg-white/15 mx-1" />
-          <button
-            onClick={() => setShowLabels((v) => !v)}
-            className={`px-2 h-7 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-all ${
-              showLabels
-                ? "bg-black/5 dark:bg-white/10 text-[#1D1D1F] dark:text-[#F5F5F7]"
-                : "text-[#86868B] hover:text-[#1D1D1F]"
-            }`}
-          >
-            <span>Labels</span>
-          </button>
-          <button
-            onClick={() => setShowGoals((v) => !v)}
-            className={`px-2 h-7 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-all ${
-              showGoals
-                ? "bg-black/5 dark:bg-white/10 text-[#0071E3] dark:text-[#2997FF]"
-                : "text-[#86868B] hover:text-[#1D1D1F]"
-            }`}
-          >
-            <span>Goals</span>
-          </button>
-          <button
-            onClick={() => setShowTrails((v) => !v)}
-            className={`px-2 h-7 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-all ${
-              showTrails
-                ? "bg-black/5 dark:bg-white/10 text-[#0071E3] dark:text-[#2997FF]"
-                : "text-[#86868B] hover:text-[#1D1D1F]"
-            }`}
-          >
-            <span>Trails</span>
-          </button>
-
-          {headerRight && (
-            <>
-              <div className="h-4 w-[1px] bg-black/10 dark:bg-white/15 mx-1" />
-              {headerRight}
-            </>
-          )}
-        </div>
-      </div>
+      <MapCanvasHeader
+        viewMode={viewMode}
+        onToggleViewMode={onToggleViewMode}
+        headerLeft={headerLeft}
+        headerRight={headerRight}
+        onZoomIn={() => setZoom((z) => Math.min(z * 1.25, 5))}
+        onZoomOut={() => setZoom((z) => Math.max(z * 0.8, 0.3))}
+        onResetView={handleResetView}
+        layers={[
+          {
+            id: "labels",
+            label: t("mapLayerLabels"),
+            active: showLabels,
+            onToggle: () => setShowLabels((v) => !v),
+          },
+          {
+            id: "goals",
+            label: t("mapLayerGoals"),
+            active: showGoals,
+            onToggle: () => setShowGoals((v) => !v),
+          },
+          {
+            id: "trails",
+            label: t("mapLayerTrails"),
+            active: showTrails,
+            onToggle: () => setShowTrails((v) => !v),
+          },
+        ]}
+      />
 
       {/* Main 2D Canvas Viewport */}
       <div

@@ -300,14 +300,9 @@ export const OperationsPage: React.FC = () => {
   }
 
   const viewportHeaderLeft = (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight shrink-0">
-        {language === "ko" ? "운영 관제 뷰포트" : "Operations Viewport"}
-      </span>
-      <span className="text-[11px] font-mono text-[#86868B] tabular-nums bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-lg border border-black/[0.04] dark:border-white/[0.06] shrink-0">
-        {mapWidthRatio}% W · {mapHeight}px H
-      </span>
-    </div>
+    <span className="text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight shrink-0">
+      {language === "ko" ? "운영 관제 뷰포트" : "Operations Viewport"}
+    </span>
   );
 
   const viewportHeaderRight = (

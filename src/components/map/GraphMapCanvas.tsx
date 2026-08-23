@@ -8,10 +8,6 @@ import React, {
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
 import {
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-  Crosshair,
   MapPin,
   Bot,
   Zap,
@@ -21,10 +17,6 @@ import {
   Package,
   X,
   Copy,
-  Check,
-  Grid,
-  Network,
-  Table,
   Boxes,
 } from "lucide-react";
 import {
@@ -38,6 +30,7 @@ import {
 import { getNodeTypeUiMeta } from "../../utils/map/topology.ts";
 import type { MapNode } from "../../domain/map/types.ts";
 import { copyToClipboard } from "../../utils/ids/ids.ts";
+import { MapCanvasHeader } from "./MapCanvasHeader.tsx";
 
 export interface GraphMapCanvasProps {
   viewMode?: "canvas" | "graph" | "accessible";
@@ -69,10 +62,10 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
   const robots = useMemo(() => snapshot?.robots || [], [snapshot?.robots]);
   const orders = useMemo(() => snapshot?.orders || [], [snapshot?.orders]);
 
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
 
-  // 2D Canvas standard dimension standards
+  // 2D Canvas standard dimensions
   const widthCells = map?.widthCells || 32;
   const heightCells = map?.heightCells || 20;
   const resolution = map?.resolutionMeters || 1.0;
@@ -83,7 +76,6 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
   const cellW = baseWidth / widthCells;
   const cellH = baseHeight / heightCells;
   const cellMin = Math.min(cellW, cellH);
-  const isCompact = cellMin < 22;
 
   const mapDim = useMemo(
     () => ({
@@ -165,7 +157,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     };
   }, [fitViewToContainer]);
 
-  // Connected edges for active node
+  // Connected edges for active node (hovered or selected)
   const activeNodeId =
     selectedNodeId !== null ? selectedNodeId : (hoveredNode?.id ?? null);
 
@@ -178,6 +170,886 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     if (activeNodeId === null || !topology) return [];
     return topology.nodeIncomingEdges.get(activeNodeId) || [];
   }, [activeNodeId, topology]);
+
+  // Offscreen canvas for static background & baseline graph edges
+  const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Pre-render static blueprint, nodes, and base graph edges to offscreen canvas
+  useEffect(() => {
+    if (!map) return;
+
+    const bgCanvas = document.createElement("canvas");
+    bgCanvas.width = baseWidth * 2; // 2x for Retina crispness
+    bgCanvas.height = baseHeight * 2;
+    const bgCtx = bgCanvas.getContext("2d");
+    if (!bgCtx) return;
+
+    bgCtx.scale(2, 2);
+
+    // 1. Clear background surface
+    bgCtx.fillStyle = isDark ? "#161618" : "#FBFBFD";
+    bgCtx.beginPath();
+    bgCtx.roundRect(0, 0, baseWidth, baseHeight, 16);
+    bgCtx.fill();
+
+    // 2. Grid & Pillars & Pod Storage
+    for (let r = 0; r < heightCells; r++) {
+      for (let c = 0; c < widthCells; c++) {
+        const idx = r * widthCells + c;
+        const isBlocked = map.cells[idx] === 1;
+        const x = c * cellW;
+        const y = (heightCells - 1 - r) * cellH;
+
+        if (isBlocked) {
+          bgCtx.save();
+          bgCtx.fillStyle = isDark ? "#27272A" : "#E2E8F0";
+          bgCtx.beginPath();
+          bgCtx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 6);
+          bgCtx.fill();
+
+          bgCtx.lineWidth = 1;
+          bgCtx.strokeStyle = isDark
+            ? "rgba(255,255,255,0.08)"
+            : "rgba(0,0,0,0.08)";
+          bgCtx.stroke();
+
+          bgCtx.fillStyle = isDark ? "#52525B" : "#94A3B8";
+          bgCtx.beginPath();
+          bgCtx.arc(
+            x + cellW / 2,
+            y + cellH / 2,
+            Math.min(cellW, cellH) * 0.22,
+            0,
+            Math.PI * 2,
+          );
+          bgCtx.fill();
+          bgCtx.restore();
+        } else {
+          const isPodStorage =
+            r >= 4 &&
+            r <= heightCells - 5 &&
+            r !== 10 &&
+            c > 0 &&
+            c < widthCells - 1;
+
+          if (isPodStorage) {
+            bgCtx.fillStyle = isDark
+              ? "rgba(99, 102, 241, 0.05)"
+              : "rgba(99, 102, 241, 0.035)";
+            bgCtx.beginPath();
+            bgCtx.roundRect(x + 1.5, y + 1.5, cellW - 3, cellH - 3, 3);
+            bgCtx.fill();
+            bgCtx.strokeStyle = isDark
+              ? "rgba(99, 102, 241, 0.12)"
+              : "rgba(99, 102, 241, 0.08)";
+            bgCtx.lineWidth = 0.5;
+            bgCtx.stroke();
+          } else {
+            bgCtx.strokeStyle = isDark
+              ? "rgba(255, 255, 255, 0.04)"
+              : "rgba(0, 0, 0, 0.045)";
+            bgCtx.lineWidth = 0.75;
+            bgCtx.strokeRect(x, y, cellW, cellH);
+          }
+        }
+      }
+    }
+
+    // 3. Highways
+    // Eastbound Outbound (Row 2)
+    bgCtx.fillStyle = isDark
+      ? "rgba(0, 113, 227, 0.12)"
+      : "rgba(0, 113, 227, 0.08)";
+    const hwy2Y = (heightCells - 1 - 2) * cellH;
+    bgCtx.fillRect(cellW, hwy2Y + 1, (widthCells - 2) * cellW, cellH - 2);
+
+    // Westbound Inbound (Row height - 3)
+    bgCtx.fillStyle = isDark
+      ? "rgba(16, 185, 129, 0.12)"
+      : "rgba(16, 185, 129, 0.08)";
+    const hwyInY = (heightCells - 1 - (heightCells - 3)) * cellH;
+    bgCtx.fillRect(cellW, hwyInY + 1, (widthCells - 2) * cellW, cellH - 2);
+
+    // Central Crossway (Row 10)
+    bgCtx.fillStyle = isDark
+      ? "rgba(245, 158, 11, 0.08)"
+      : "rgba(245, 158, 11, 0.05)";
+    const hwyCrossY = (heightCells - 1 - 10) * cellH;
+    bgCtx.fillRect(cellW, hwyCrossY + 1, (widthCells - 2) * cellW, cellH - 2);
+
+    // 4. Base Graph Edges & Arrows (Static Layer)
+    if (topology) {
+      bgCtx.save();
+      for (const edge of topology.edges) {
+        const fromX = (edge.fromColumn + 0.5) * cellW;
+        const fromY = (heightCells - 1 - edge.fromRow + 0.5) * cellH;
+        const toX = (edge.toColumn + 0.5) * cellW;
+        const toY = (heightCells - 1 - edge.toRow + 0.5) * cellH;
+
+        let strokeColor = isDark ? "#52525B" : "#94A3B8";
+        let strokeWidth = 1.2;
+        let strokeOpacity = isDark ? 0.4 : 0.35;
+
+        if (edge.type === "station_feeder") {
+          strokeColor = isDark ? "#FBBF24" : "#F59E0B";
+          strokeOpacity = 0.75;
+          strokeWidth = 1.6;
+        } else if (edge.type === "corridor") {
+          strokeColor = isDark ? "#60A5FA" : "#0071E3";
+          strokeOpacity = 0.6;
+          strokeWidth = 1.5;
+        }
+
+        bgCtx.save();
+        bgCtx.strokeStyle = strokeColor;
+        bgCtx.globalAlpha = strokeOpacity;
+        bgCtx.lineWidth = strokeWidth;
+        bgCtx.lineCap = "round";
+
+        bgCtx.beginPath();
+        bgCtx.moveTo(fromX, fromY);
+        bgCtx.lineTo(toX, toY);
+        bgCtx.stroke();
+
+        // Direction Arrow
+        if (showEdgeArrows && edge.direction === "forward") {
+          const midX = (fromX + toX) / 2;
+          const midY = (fromY + toY) / 2;
+          const dx = toX - fromX;
+          const dy = toY - fromY;
+          const angle = Math.atan2(dy, dx);
+
+          bgCtx.save();
+          bgCtx.translate(midX, midY);
+          bgCtx.rotate(angle);
+          bgCtx.fillStyle = strokeColor;
+          bgCtx.globalAlpha = Math.min(0.9, strokeOpacity + 0.3);
+
+          bgCtx.beginPath();
+          bgCtx.moveTo(3, 0);
+          bgCtx.lineTo(-2.6, -2);
+          bgCtx.lineTo(-1.2, 0);
+          bgCtx.lineTo(-2.6, 2);
+          bgCtx.closePath();
+          bgCtx.fill();
+          bgCtx.restore();
+        }
+
+        bgCtx.restore();
+      }
+      bgCtx.restore();
+    }
+
+    // 5. Specialized Station & Waypoint Nodes
+    if (topology) {
+      const isCompact = cellMin < 22;
+      const pad = Math.max(1, cellMin * 0.08);
+
+      for (const node of topology.nodes) {
+        const x = node.column * cellW;
+        const y = (heightCells - 1 - node.row) * cellH;
+        const cx = x + cellW / 2;
+        const cy = y + cellH / 2;
+
+        if (node.type === "waypoint") {
+          if (!showWaypoints) continue;
+          bgCtx.save();
+          bgCtx.fillStyle = isDark ? "#71717A" : "#94A3B8";
+          bgCtx.beginPath();
+          bgCtx.arc(cx, cy, Math.max(2, cellMin * 0.14), 0, Math.PI * 2);
+          bgCtx.fill();
+          bgCtx.restore();
+          continue;
+        }
+
+        if (node.type === "pillar") continue;
+
+        bgCtx.save();
+
+        if (node.type === "pick") {
+          bgCtx.fillStyle = isDark
+            ? "rgba(245, 158, 11, 0.16)"
+            : "rgba(245, 158, 11, 0.12)";
+          bgCtx.beginPath();
+          bgCtx.roundRect(
+            x + pad,
+            y + pad,
+            cellW - pad * 2,
+            cellH - pad * 2,
+            Math.min(6, cellMin * 0.25),
+          );
+          bgCtx.fill();
+          bgCtx.lineWidth = isCompact ? 1.0 : 1.4;
+          bgCtx.strokeStyle = isDark ? "#FBBF24" : "#F59E0B";
+          bgCtx.stroke();
+
+          bgCtx.fillStyle = isDark
+            ? "rgba(245, 158, 11, 0.3)"
+            : "rgba(245, 158, 11, 0.2)";
+          bgCtx.beginPath();
+          bgCtx.arc(cx, cy, cellMin * 0.32, 0, Math.PI * 2);
+          bgCtx.fill();
+
+          bgCtx.fillStyle = isDark ? "#FBBF24" : "#D97706";
+          bgCtx.font = isCompact
+            ? "900 5.5px 'JetBrains Mono', monospace"
+            : "900 7px 'JetBrains Mono', monospace";
+          bgCtx.textAlign = "center";
+          bgCtx.textBaseline = "middle";
+          bgCtx.fillText(isCompact ? "PK" : "PICK", cx, cy + 0.5);
+        } else if (node.type === "place" || node.type === "workstation") {
+          bgCtx.fillStyle = isDark
+            ? "rgba(6, 182, 212, 0.16)"
+            : "rgba(6, 182, 212, 0.12)";
+          bgCtx.beginPath();
+          bgCtx.roundRect(
+            x + pad,
+            y + pad,
+            cellW - pad * 2,
+            cellH - pad * 2,
+            Math.min(6, cellMin * 0.25),
+          );
+          bgCtx.fill();
+          bgCtx.lineWidth = isCompact ? 1.0 : 1.4;
+          bgCtx.strokeStyle = isDark ? "#22D3EE" : "#06B6D4";
+          bgCtx.stroke();
+
+          bgCtx.fillStyle = isDark
+            ? "rgba(6, 182, 212, 0.3)"
+            : "rgba(6, 182, 212, 0.2)";
+          bgCtx.beginPath();
+          bgCtx.arc(cx, cy, cellMin * 0.32, 0, Math.PI * 2);
+          bgCtx.fill();
+
+          bgCtx.fillStyle = isDark ? "#22D3EE" : "#0891B2";
+          bgCtx.font = isCompact
+            ? "900 5.5px 'JetBrains Mono', monospace"
+            : "900 7px 'JetBrains Mono', monospace";
+          bgCtx.textAlign = "center";
+          bgCtx.textBaseline = "middle";
+          bgCtx.fillText(isCompact ? "PL" : "PLACE", cx, cy + 0.5);
+        } else if (node.type === "chute") {
+          bgCtx.fillStyle = isDark
+            ? "rgba(16, 185, 129, 0.16)"
+            : "rgba(16, 185, 129, 0.12)";
+          bgCtx.beginPath();
+          bgCtx.roundRect(
+            x + pad,
+            y + pad,
+            cellW - pad * 2,
+            cellH - pad * 2,
+            Math.min(6, cellMin * 0.25),
+          );
+          bgCtx.fill();
+          bgCtx.lineWidth = isCompact ? 1.0 : 1.4;
+          bgCtx.strokeStyle = isDark ? "#34D399" : "#10B981";
+          bgCtx.stroke();
+
+          bgCtx.fillStyle = isDark
+            ? "rgba(16, 185, 129, 0.3)"
+            : "rgba(16, 185, 129, 0.2)";
+          bgCtx.beginPath();
+          bgCtx.arc(cx, cy, cellMin * 0.32, 0, Math.PI * 2);
+          bgCtx.fill();
+
+          bgCtx.fillStyle = isDark ? "#34D399" : "#059669";
+          bgCtx.font = isCompact
+            ? "900 5.5px 'JetBrains Mono', monospace"
+            : "900 6.5px 'JetBrains Mono', monospace";
+          bgCtx.textAlign = "center";
+          bgCtx.textBaseline = "middle";
+          bgCtx.fillText(isCompact ? "CH" : "CHUTE", cx, cy + 0.5);
+        } else if (node.type === "charger") {
+          bgCtx.fillStyle = isDark
+            ? "rgba(245, 158, 11, 0.16)"
+            : "rgba(245, 158, 11, 0.12)";
+          bgCtx.beginPath();
+          bgCtx.roundRect(
+            x + pad,
+            y + pad,
+            cellW - pad * 2,
+            cellH - pad * 2,
+            Math.min(6, cellMin * 0.25),
+          );
+          bgCtx.fill();
+          bgCtx.lineWidth = isCompact ? 1.0 : 1.4;
+          bgCtx.strokeStyle = isDark ? "#FBBF24" : "#F59E0B";
+          bgCtx.stroke();
+
+          bgCtx.fillStyle = isDark ? "#FBBF24" : "#D97706";
+          bgCtx.font = isCompact
+            ? "bold 7.5px system-ui, sans-serif"
+            : "900 7.5px 'JetBrains Mono', monospace";
+          bgCtx.textAlign = "center";
+          bgCtx.textBaseline = "middle";
+          bgCtx.fillText(isCompact ? "⚡" : "⚡CHG", cx, cy + 0.5);
+        } else if (node.type === "buffer") {
+          bgCtx.fillStyle = isDark
+            ? "rgba(139, 92, 246, 0.16)"
+            : "rgba(139, 92, 246, 0.12)";
+          bgCtx.beginPath();
+          bgCtx.roundRect(
+            x + pad,
+            y + pad,
+            cellW - pad * 2,
+            cellH - pad * 2,
+            Math.min(6, cellMin * 0.25),
+          );
+          bgCtx.fill();
+          bgCtx.lineWidth = isCompact ? 0.9 : 1.2;
+          bgCtx.strokeStyle = isDark ? "#A78BFA" : "#8B5CF6";
+          bgCtx.setLineDash([3, 2]);
+          bgCtx.stroke();
+          bgCtx.setLineDash([]);
+
+          bgCtx.fillStyle = isDark ? "#A78BFA" : "#7C3AED";
+          bgCtx.font = isCompact
+            ? "bold 6.5px system-ui, sans-serif"
+            : "bold 9px system-ui, -apple-system, sans-serif";
+          bgCtx.textAlign = "center";
+          bgCtx.textBaseline = "middle";
+          bgCtx.fillText("P", cx, cy + 0.5);
+        } else if (node.type === "rack") {
+          const rw = cellW - pad * 2;
+          const rh = cellH - pad * 2;
+          const rx = x + pad;
+          const ry = y + pad;
+
+          bgCtx.fillStyle = isDark
+            ? "rgba(99, 102, 241, 0.18)"
+            : "rgba(99, 102, 241, 0.10)";
+          bgCtx.beginPath();
+          bgCtx.roundRect(rx, ry, rw, rh, Math.min(4, cellMin * 0.2));
+          bgCtx.fill();
+
+          bgCtx.lineWidth = isCompact ? 0.9 : 1.2;
+          bgCtx.strokeStyle = isDark ? "#818CF8" : "#6366F1";
+          bgCtx.stroke();
+
+          const tierH = rh / 3;
+          bgCtx.strokeStyle = isDark
+            ? "rgba(165, 180, 252, 0.4)"
+            : "rgba(99, 102, 241, 0.35)";
+          bgCtx.lineWidth = 0.8;
+          bgCtx.beginPath();
+          bgCtx.moveTo(rx + 2, ry + tierH);
+          bgCtx.lineTo(rx + rw - 2, ry + tierH);
+          bgCtx.moveTo(rx + 2, ry + tierH * 2);
+          bgCtx.lineTo(rx + rw - 2, ry + tierH * 2);
+          bgCtx.stroke();
+
+          bgCtx.fillStyle = isDark
+            ? "rgba(99, 102, 241, 0.7)"
+            : "rgba(99, 102, 241, 0.55)";
+          bgCtx.fillRect(
+            rx + 2,
+            ry + 1.5,
+            Math.max(2, rw * 0.42),
+            Math.max(1, tierH - 2.5),
+          );
+          bgCtx.fillStyle = isDark
+            ? "rgba(245, 158, 11, 0.7)"
+            : "rgba(245, 158, 11, 0.55)";
+          bgCtx.fillRect(
+            rx + rw * 0.48,
+            ry + tierH + 1.5,
+            Math.max(2, rw * 0.42),
+            Math.max(1, tierH - 2.5),
+          );
+        }
+
+        bgCtx.restore();
+      }
+    }
+
+    bgCanvasRef.current = bgCanvas;
+  }, [
+    map,
+    topology,
+    baseWidth,
+    baseHeight,
+    widthCells,
+    heightCells,
+    cellW,
+    cellH,
+    cellMin,
+    isDark,
+    showEdgeArrows,
+    showWaypoints,
+  ]);
+
+  // Selected robot trajectory
+  const selectedRobot = useMemo(
+    () => robots.find((r) => r.id === selectedRobotId) || null,
+    [robots, selectedRobotId],
+  );
+
+  const selectedGoalAssignment = useMemo(() => {
+    if (!selectedRobot) return null;
+    for (const order of orders) {
+      const match = order.assignments.find(
+        (a) => a.robotId === selectedRobot.id,
+      );
+      if (match) return match;
+    }
+    return null;
+  }, [selectedRobot, orders]);
+
+  // Main 60 FPS HTML5 Canvas Render Loop
+  const renderFrame = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+
+    if (
+      canvas.width !== rect.width * dpr ||
+      canvas.height !== rect.height * dpr
+    ) {
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+    }
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    // Apply Pan and Zoom
+    ctx.translate(pan.x, pan.y);
+    ctx.scale(zoom, zoom);
+
+    // 1. Draw Cached Background & Static Edges Layer
+    if (bgCanvasRef.current) {
+      ctx.drawImage(bgCanvasRef.current, 0, 0, baseWidth, baseHeight);
+    }
+
+    // Viewport Frustum Culling bounds
+    const viewLeft = -pan.x / zoom;
+    const viewTop = -pan.y / zoom;
+    const viewRight = (rect.width - pan.x) / zoom;
+    const viewBottom = (rect.height - pan.y) / zoom;
+
+    // 2. Active Outgoing / Incoming Edges Highlight
+    if (
+      topology &&
+      (activeOutgoingEdges.length > 0 || activeIncomingEdges.length > 0)
+    ) {
+      ctx.save();
+
+      // Draw Outgoing Edges (Blue Highlight)
+      for (const edge of activeOutgoingEdges) {
+        const fromX = (edge.fromColumn + 0.5) * cellW;
+        const fromY = (heightCells - 1 - edge.fromRow + 0.5) * cellH;
+        const toX = (edge.toColumn + 0.5) * cellW;
+        const toY = (heightCells - 1 - edge.toRow + 0.5) * cellH;
+
+        ctx.save();
+        ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
+        ctx.lineWidth = 2.6;
+        ctx.lineCap = "round";
+        ctx.shadowColor = isDark ? "#2997FF" : "#0071E3";
+        ctx.shadowBlur = 8;
+
+        ctx.beginPath();
+        ctx.moveTo(fromX, fromY);
+        ctx.lineTo(toX, toY);
+        ctx.stroke();
+
+        // Highlight Arrow
+        if (showEdgeArrows && edge.direction === "forward") {
+          const midX = (fromX + toX) / 2;
+          const midY = (fromY + toY) / 2;
+          const dx = toX - fromX;
+          const dy = toY - fromY;
+          const angle = Math.atan2(dy, dx);
+
+          ctx.translate(midX, midY);
+          ctx.rotate(angle);
+          ctx.fillStyle = isDark ? "#2997FF" : "#0071E3";
+          ctx.beginPath();
+          ctx.moveTo(4, 0);
+          ctx.lineTo(-3, -2.5);
+          ctx.lineTo(-1.5, 0);
+          ctx.lineTo(-3, 2.5);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // Draw Incoming Edges (Green Highlight)
+      for (const edge of activeIncomingEdges) {
+        const fromX = (edge.fromColumn + 0.5) * cellW;
+        const fromY = (heightCells - 1 - edge.fromRow + 0.5) * cellH;
+        const toX = (edge.toColumn + 0.5) * cellW;
+        const toY = (heightCells - 1 - edge.toRow + 0.5) * cellH;
+
+        ctx.save();
+        ctx.strokeStyle = isDark ? "#30D158" : "#34C759";
+        ctx.lineWidth = 2.6;
+        ctx.lineCap = "round";
+        ctx.shadowColor = isDark ? "#30D158" : "#34C759";
+        ctx.shadowBlur = 8;
+
+        ctx.beginPath();
+        ctx.moveTo(fromX, fromY);
+        ctx.lineTo(toX, toY);
+        ctx.stroke();
+
+        // Highlight Arrow
+        if (showEdgeArrows && edge.direction === "forward") {
+          const midX = (fromX + toX) / 2;
+          const midY = (fromY + toY) / 2;
+          const dx = toX - fromX;
+          const dy = toY - fromY;
+          const angle = Math.atan2(dy, dx);
+
+          ctx.translate(midX, midY);
+          ctx.rotate(angle);
+          ctx.fillStyle = isDark ? "#30D158" : "#34C759";
+          ctx.beginPath();
+          ctx.moveTo(4, 0);
+          ctx.lineTo(-3, -2.5);
+          ctx.lineTo(-1.5, 0);
+          ctx.lineTo(-3, 2.5);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
+    // 3. Hovered Cell / Node Indicator
+    if (hoverCoord) {
+      const hx = (hoverCoord.cell.column / widthCells) * baseWidth;
+      const hy =
+        ((heightCells - 1 - hoverCoord.cell.row) / heightCells) * baseHeight;
+      ctx.save();
+      ctx.fillStyle = isDark
+        ? "rgba(41, 151, 255, 0.16)"
+        : "rgba(0, 113, 227, 0.12)";
+      ctx.beginPath();
+      ctx.roundRect(hx + 1, hy + 1, cellW - 2, cellH - 2, 5);
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 4. Selected Node Glow Halo
+    if (selectedNodeId !== null && topology) {
+      const node = topology.nodeMap.get(selectedNodeId);
+      if (node) {
+        const nx = node.column * cellW;
+        const ny = (heightCells - 1 - node.row) * cellH;
+        const ui = getNodeTypeUiMeta(node.type);
+
+        ctx.save();
+        ctx.fillStyle = ui.glowColor;
+        ctx.globalAlpha = 0.25;
+        ctx.beginPath();
+        ctx.roundRect(nx, ny, cellW, cellH, 7);
+        ctx.fill();
+
+        ctx.globalAlpha = 1.0;
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = ui.strokeColor;
+        ctx.shadowColor = ui.strokeColor;
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // 5. Selected Robot Trajectory Path
+    if (showTrails && selectedRobot && selectedGoalAssignment) {
+      const startPos = worldToScreen(
+        { x: selectedRobot.pose.xMeters, y: selectedRobot.pose.yMeters },
+        mapDim,
+        baseWidth,
+        baseHeight,
+      );
+      const goalPoint = cellToWorld(
+        {
+          column: selectedGoalAssignment.goalColumn,
+          row: selectedGoalAssignment.goalRow,
+        },
+        resolution,
+        origin,
+      );
+      const goalPos = worldToScreen(goalPoint, mapDim, baseWidth, baseHeight);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(startPos.x, startPos.y);
+      ctx.lineTo(goalPos.x, goalPos.y);
+      ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 4]);
+      ctx.lineCap = "round";
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 6. Active Order Goals (Target Reticle)
+    if (showGoals && orders.length > 0) {
+      ctx.save();
+      for (const order of orders) {
+        for (const assign of order.assignments) {
+          const gx = (assign.goalColumn + 0.5) * cellW;
+          const gy = (heightCells - 1 - assign.goalRow + 0.5) * cellH;
+
+          if (
+            gx < viewLeft - 30 ||
+            gx > viewRight + 30 ||
+            gy < viewTop - 30 ||
+            gy > viewBottom + 30
+          ) {
+            continue;
+          }
+
+          const isAssignedToSelected = assign.robotId === selectedRobotId;
+          const goalR = isAssignedToSelected ? cellMin * 0.55 : cellMin * 0.4;
+
+          ctx.beginPath();
+          ctx.arc(gx, gy, goalR, 0, Math.PI * 2);
+          ctx.fillStyle = isAssignedToSelected
+            ? "rgba(0, 113, 227, 0.2)"
+            : "rgba(0, 113, 227, 0.08)";
+          ctx.fill();
+          ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
+          ctx.lineWidth = isAssignedToSelected ? 2 : 1.2;
+          ctx.setLineDash([4, 3]);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(gx, gy, Math.max(2, cellMin * 0.1), 0, Math.PI * 2);
+          ctx.fillStyle = isDark ? "#2997FF" : "#0071E3";
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    // 7. Robots (with LOD & Frustum Culling)
+    const isCompactFleet = cellMin < 22;
+    const robotRadius = cellMin * 0.38;
+    const haloRadius = robotRadius * 1.6;
+    const arrowTip = robotRadius * 0.72;
+    const arrowBase = robotRadius * 0.36;
+    const isLODCompact = zoom < 0.6;
+
+    for (let i = 0; i < robots.length; i++) {
+      const robot = robots[i];
+      const screenPos = worldToScreen(
+        { x: robot.pose.xMeters, y: robot.pose.yMeters },
+        mapDim,
+        baseWidth,
+        baseHeight,
+      );
+
+      // Frustum Culling
+      if (
+        screenPos.x < viewLeft - 40 ||
+        screenPos.x > viewRight + 40 ||
+        screenPos.y < viewTop - 40 ||
+        screenPos.y > viewBottom + 40
+      ) {
+        continue;
+      }
+
+      const isSelected = robot.id === selectedRobotId;
+      const isExecuting = robot.operationalState === "EXECUTING";
+      const isCharging = robot.operationalState === "CHARGING";
+      const isDisconnected = robot.connectivity === "DISCONNECTED";
+      const isSafetyAlert =
+        robot.safety !== "NORMAL" && robot.safety !== "WAIT";
+
+      const robotColor = isDisconnected
+        ? "#FF453A"
+        : isSafetyAlert
+          ? "#FF9F0A"
+          : isCharging
+            ? isDark
+              ? "#FFD60A"
+              : "#FF9500"
+            : isExecuting
+              ? "#30D158"
+              : isDark
+                ? "#2997FF"
+                : "#0071E3";
+
+      ctx.save();
+      ctx.translate(screenPos.x, screenPos.y);
+
+      if (isSelected) {
+        ctx.beginPath();
+        ctx.arc(
+          0,
+          0,
+          isLODCompact ? haloRadius * 0.8 : haloRadius,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fillStyle = isDark
+          ? "rgba(41, 151, 255, 0.25)"
+          : "rgba(0, 113, 227, 0.2)";
+        ctx.fill();
+        ctx.lineWidth = Math.max(1.5, robotRadius * 0.2);
+        ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
+        ctx.stroke();
+      }
+
+      if (isLODCompact) {
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(3, robotRadius * 0.7), 0, Math.PI * 2);
+        ctx.fillStyle = robotColor;
+        ctx.fill();
+        ctx.lineWidth = 1.0;
+        ctx.strokeStyle = isDark ? "#1C1C1E" : "#FFFFFF";
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, robotRadius, 0, Math.PI * 2);
+        ctx.fillStyle = isDark ? "#1C1C1E" : "#FFFFFF";
+        ctx.fill();
+        ctx.lineWidth = isSelected
+          ? Math.max(2.0, robotRadius * 0.25)
+          : Math.max(1.2, robotRadius * 0.18);
+        ctx.strokeStyle = robotColor;
+        ctx.stroke();
+
+        // Heading Direction Chevron
+        const rotDeg = yawToScreenRotationDegrees(robot.pose.yawRadians);
+        ctx.save();
+        ctx.rotate((rotDeg * Math.PI) / 180);
+        ctx.beginPath();
+        ctx.moveTo(arrowTip, 0);
+        ctx.lineTo(0, -arrowBase);
+        ctx.lineTo(arrowTip * 0.25, 0);
+        ctx.lineTo(0, arrowBase);
+        ctx.closePath();
+        ctx.fillStyle = robotColor;
+        ctx.fill();
+        ctx.restore();
+
+        // Center Pivot
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(1.2, robotRadius * 0.25), 0, Math.PI * 2);
+        ctx.fillStyle = robotColor;
+        ctx.fill();
+
+        // Monospace ID Badge
+        const shouldShowLabel =
+          isSelected || (showNodeLabels && (!isCompactFleet || zoom >= 1.2));
+
+        if (shouldShowLabel) {
+          const fontSize = isCompactFleet ? 7 : 8.5;
+          ctx.font = `bold ${fontSize}px 'JetBrains Mono', monospace, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+
+          const displayId =
+            isCompactFleet && !isSelected
+              ? robot.id.replace("robot-", "")
+              : robot.id;
+          const textMetrics = ctx.measureText(displayId);
+          const badgeW = textMetrics.width + (isCompactFleet ? 8 : 12);
+          const badgeH = isCompactFleet ? 10 : 13;
+          const badgeY = robotRadius + (isCompactFleet ? 3 : 5);
+
+          ctx.fillStyle = isDark
+            ? "rgba(28, 28, 30, 0.95)"
+            : "rgba(255, 255, 255, 0.95)";
+          ctx.beginPath();
+          ctx.roundRect(
+            -badgeW / 2,
+            badgeY - badgeH / 2,
+            badgeW,
+            badgeH,
+            isCompactFleet ? 2.5 : 3.5,
+          );
+          ctx.fill();
+
+          ctx.lineWidth = 0.75;
+          ctx.strokeStyle = isSelected
+            ? isDark
+              ? "#2997FF"
+              : "#0071E3"
+            : isDark
+              ? "rgba(255, 255, 255, 0.12)"
+              : "rgba(0, 0, 0, 0.08)";
+          ctx.stroke();
+
+          ctx.fillStyle = isSelected
+            ? isDark
+              ? "#2997FF"
+              : "#0071E3"
+            : isDark
+              ? "#F5F5F7"
+              : "#1D1D1F";
+          ctx.fillText(displayId, 0, badgeY);
+        }
+      }
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }, [
+    pan,
+    zoom,
+    baseWidth,
+    baseHeight,
+    cellW,
+    cellH,
+    cellMin,
+    heightCells,
+    widthCells,
+    isDark,
+    mapDim,
+    topology,
+    activeOutgoingEdges,
+    activeIncomingEdges,
+    selectedNodeId,
+    hoverCoord,
+    showTrails,
+    selectedRobot,
+    selectedGoalAssignment,
+    resolution,
+    origin,
+    showGoals,
+    orders,
+    selectedRobotId,
+    robots,
+    showNodeLabels,
+    showEdgeArrows,
+  ]);
+
+  // RequestAnimationFrame 60 FPS Loop
+  const rafRef = useRef<number | null>(null);
+  useEffect(() => {
+    let active = true;
+    const loop = () => {
+      if (!active) return;
+      renderFrame();
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+
+    return () => {
+      active = false;
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [renderFrame]);
 
   // Handle Dragging vs Click
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -195,7 +1067,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
       });
     }
 
-    // Hover Coordinate Tracker in SVG
+    // Hover Coordinate Tracker
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const clickX = (e.clientX - rect.left - pan.x) / zoom;
@@ -221,8 +1093,17 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
           yMeters: cellCenter.y,
           cell: { column: clampedCol, row: clampedRow },
         });
+
+        // Track hovered node if any
+        if (topology) {
+          const matchedNode = topology.nodes.find(
+            (n) => n.column === clampedCol && n.row === clampedRow,
+          );
+          setHoveredNode(matchedNode || null);
+        }
       } else {
         setHoverCoord(null);
+        setHoveredNode(null);
       }
     }
   };
@@ -233,8 +1114,46 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
       e.clientX - mouseDownPosRef.current.x,
       e.clientY - mouseDownPosRef.current.y,
     );
-    if (dist < 5 && (e.target as HTMLElement).tagName === "svg") {
-      setSelectedNodeId(null);
+
+    // If mouse moved less than 5px, handle node / robot selection
+    if (dist < 5 && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const clickX = (e.clientX - rect.left - pan.x) / zoom;
+      const clickY = (e.clientY - rect.top - pan.y) / zoom;
+
+      // 1. Check if clicked near a robot
+      let clickedRobot = false;
+      const hitRadius = Math.max(16, cellMin * 0.5);
+      for (const robot of robots) {
+        const pos = worldToScreen(
+          { x: robot.pose.xMeters, y: robot.pose.yMeters },
+          mapDim,
+          baseWidth,
+          baseHeight,
+        );
+        if (Math.hypot(pos.x - clickX, pos.y - clickY) <= hitRadius) {
+          setSelectedRobotId(robot.id);
+          clickedRobot = true;
+          break;
+        }
+      }
+
+      // 2. Check if clicked near a topology node
+      if (!clickedRobot && topology) {
+        let clickedNode = false;
+        for (const node of topology.nodes) {
+          const nx = (node.column + 0.5) * cellW;
+          const ny = (heightCells - 1 - node.row + 0.5) * cellH;
+          if (Math.hypot(nx - clickX, ny - clickY) <= cellMin * 0.5) {
+            setSelectedNodeId(node.id === selectedNodeId ? null : node.id);
+            clickedNode = true;
+            break;
+          }
+        }
+        if (!clickedNode) {
+          setSelectedNodeId(null);
+        }
+      }
     }
   };
 
@@ -263,34 +1182,6 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     fitViewToContainer();
   };
 
-  const handleFitFleet = () => {
-    if (robots.length === 0) return fitViewToContainer();
-    const xs = robots.map((r) => r.pose.xMeters);
-    const ys = robots.map((r) => r.pose.yMeters);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-
-    const screenCenter = worldToScreen(
-      { x: centerX, y: centerY },
-      mapDim,
-      baseWidth,
-      baseHeight,
-    );
-
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setPan({
-        x: rect.width / 2 - screenCenter.x * zoom,
-        y: rect.height / 2 - screenCenter.y * zoom,
-      });
-    }
-  };
-
   const handleFocusSelected = () => {
     const selected = robots.find((r) => r.id === selectedRobotId);
     if (!selected || !containerRef.current) return;
@@ -310,19 +1201,6 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
       y: rect.height / 2 - pos.y * targetZoom,
     });
   };
-
-  // Selected robot trajectory
-  const selectedRobot = robots.find((r) => r.id === selectedRobotId);
-  const selectedGoalAssignment = useMemo(() => {
-    if (!selectedRobot) return null;
-    for (const order of orders) {
-      const match = order.assignments.find(
-        (a) => a.robotId === selectedRobot.id,
-      );
-      if (match) return match;
-    }
-    return null;
-  }, [selectedRobot, orders]);
 
   // Selected node details
   const selectedNodeDetails = useMemo(() => {
@@ -376,8 +1254,6 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
   const hudPlacement = useMemo(() => {
     if (!selectedNodeDetails || !containerRef.current) return null;
     const { node } = selectedNodeDetails;
-    const cellW = baseWidth / widthCells;
-    const cellH = baseHeight / heightCells;
     const cx = (node.column + 0.5) * cellW;
     const cy = (heightCells - 1 - node.row + 0.5) * cellH;
 
@@ -396,162 +1272,42 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     if (top < 16) top = 16;
 
     return { left, top };
-  }, [
-    selectedNodeDetails,
-    zoom,
-    pan,
-    baseWidth,
-    baseHeight,
-    widthCells,
-    heightCells,
-  ]);
+  }, [selectedNodeDetails, zoom, pan, cellW, cellH, heightCells]);
 
   return (
     <div className="apple-card relative w-full h-full min-h-[400px] overflow-hidden flex flex-col select-none transition-colors duration-300">
       {/* 1. Top Glassmorphic Controls Toolbar */}
-      <div className="shrink-0 p-3 sm:px-4 sm:py-2.5 flex flex-wrap items-center justify-between gap-2.5 border-b border-black/[0.05] dark:border-white/[0.06] bg-white/70 dark:bg-[#1C1C1E]/70 backdrop-blur-md z-10">
-        {/* Left: Viewport Info, Mode Switcher & Topology Stats */}
-        <div className="flex items-center gap-2.5 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] flex-wrap">
-          {headerLeft}
-          {headerLeft && (
-            <div className="h-4 w-[1px] bg-black/10 dark:bg-white/15 hidden sm:block" />
-          )}
+      <MapCanvasHeader
+        viewMode={viewMode}
+        onToggleViewMode={onToggleViewMode}
+        headerLeft={headerLeft}
+        headerRight={headerRight}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onResetView={handleResetView}
+        layers={[
+          {
+            id: "labels",
+            label: t("mapLayerLabels"),
+            active: showNodeLabels,
+            onToggle: () => setShowNodeLabels((p) => !p),
+          },
+          {
+            id: "arrows",
+            label: t("mapLayerArrows"),
+            active: showEdgeArrows,
+            onToggle: () => setShowEdgeArrows((p) => !p),
+          },
+          {
+            id: "waypoints",
+            label: t("mapLayerWaypoints"),
+            active: showWaypoints,
+            onToggle: () => setShowWaypoints((p) => !p),
+          },
+        ]}
+      />
 
-          {/* Mode Switcher */}
-          {onToggleViewMode && (
-            <div className="inline-flex bg-[#F2F4F6] dark:bg-[#252528] p-1 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] items-center gap-0.5 text-xs">
-              <button
-                onClick={() => onToggleViewMode("canvas")}
-                className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === "canvas"
-                    ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                    : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-                }`}
-                title={t("mapCanvasView")}
-              >
-                <Grid className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">2D Canvas (Fast)</span>
-              </button>
-
-              <button
-                onClick={() => onToggleViewMode("graph")}
-                className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === "graph"
-                    ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                    : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-                }`}
-                title={t("mapGraphView")}
-              >
-                <Network className="w-3.5 h-3.5 text-[#34C759] dark:text-[#30D158]" />
-                <span className="hidden sm:inline">Graph Topology</span>
-              </button>
-
-              <button
-                onClick={() => onToggleViewMode("accessible")}
-                className={`px-3 py-1 rounded-xl font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === "accessible"
-                    ? "bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs"
-                    : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7]"
-                }`}
-                title={t("mapAccessibleView")}
-              >
-                <Table className="w-3.5 h-3.5 text-[#FF9F0A]" />
-                <span className="hidden sm:inline">Table View</span>
-              </button>
-            </div>
-          )}
-
-          <span className="text-[#D2D2D7] dark:text-[#3A3A3C] hidden md:inline">
-            |
-          </span>
-          <span className="font-mono text-[11px] text-[#86868B] tabular-nums hidden md:inline">
-            {topology?.nodes.length || 0} Nodes · {topology?.edges.length || 0}{" "}
-            Edges
-          </span>
-        </div>
-
-        {/* Right: Controls, Layer Toggles & Header Right */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            onClick={handleZoomIn}
-            className="w-7 h-7 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] transition-all cursor-pointer"
-            title={t("mapZoomIn")}
-          >
-            <ZoomIn className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={handleZoomOut}
-            className="w-7 h-7 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] transition-all cursor-pointer"
-            title={t("mapZoomOut")}
-          >
-            <ZoomOut className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={handleResetView}
-            className="w-7 h-7 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] transition-all cursor-pointer"
-            title={t("mapResetView")}
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
-          {selectedRobotId && (
-            <button
-              onClick={handleFocusSelected}
-              className="px-2.5 h-7 rounded-lg bg-[#0071E3]/10 dark:bg-[#2997FF]/15 text-[#0071E3] dark:text-[#2997FF] hover:bg-[#0071E3]/20 flex items-center gap-1 text-[11px] font-medium transition-all cursor-pointer"
-              title="Focus Selected Robot"
-            >
-              <Crosshair className="w-3 h-3" />
-              <span>{selectedRobotId}</span>
-            </button>
-          )}
-
-          {/* Graph Layer Toggles */}
-          <div className="h-4 w-[1px] bg-black/10 dark:bg-white/15 mx-1" />
-          <button
-            onClick={() => setShowNodeLabels((p) => !p)}
-            className={`px-2 h-7 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer ${
-              showNodeLabels
-                ? "bg-black/5 dark:bg-white/10 text-[#1D1D1F] dark:text-[#F5F5F7]"
-                : "text-[#86868B] hover:text-[#1D1D1F]"
-            }`}
-            title="Toggle node labels"
-          >
-            <span>Labels</span>
-          </button>
-
-          <button
-            onClick={() => setShowEdgeArrows((p) => !p)}
-            className={`px-2 h-7 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer ${
-              showEdgeArrows
-                ? "bg-black/5 dark:bg-white/10 text-[#0071E3] dark:text-[#2997FF]"
-                : "text-[#86868B] hover:text-[#1D1D1F]"
-            }`}
-            title="Toggle edge arrows"
-          >
-            <span>Arrows</span>
-          </button>
-
-          <button
-            onClick={() => setShowWaypoints((p) => !p)}
-            className={`px-2 h-7 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer ${
-              showWaypoints
-                ? "bg-black/5 dark:bg-white/10 text-[#0071E3] dark:text-[#2997FF]"
-                : "text-[#86868B] hover:text-[#1D1D1F]"
-            }`}
-            title="Toggle transit waypoints"
-          >
-            <span>Waypoints</span>
-          </button>
-
-          {headerRight && (
-            <>
-              <div className="h-4 w-[1px] bg-black/10 dark:bg-white/15 mx-1" />
-              {headerRight}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* 2. Interactive Graph SVG Canvas with 2D Layout Foundation */}
+      {/* 2. Interactive High-Performance HTML5 Canvas Viewport */}
       <div
         ref={containerRef}
         onMouseDown={handleMouseDown}
@@ -566,684 +1322,10 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
           isDragging ? "cursor-grabbing" : "cursor-grab"
         }`}
       >
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${baseWidth} ${baseHeight}`}
-          className="w-full h-full max-h-full block"
-          style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            transformOrigin: "center center",
-            transition: isDragging ? "none" : "transform 0.08s ease-out",
-          }}
-        >
-          <defs>
-            <filter id="graphGlow" x="-30%" y="-30%" width="160%" height="160%">
-              <feGaussianBlur stdDeviation="3.5" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
-            </filter>
-          </defs>
-
-          {/* 1. Structural Warehouse Floor Blueprint (2D Canvas Standard) */}
-          <g className="warehouse-blueprint">
-            {/* Background Base */}
-            <rect
-              x="0"
-              y="0"
-              width={baseWidth}
-              height={baseHeight}
-              fill={isDark ? "#161618" : "#FBFBFD"}
-              rx="16"
-            />
-
-            {/* Warehouse Grid Cells & Structural Pillars */}
-            {map &&
-              Array.from({ length: heightCells }).map((_, r) =>
-                Array.from({ length: widthCells }).map((__, c) => {
-                  const idx = r * widthCells + c;
-                  const isBlocked = map.cells[idx] === 1;
-                  const x = c * cellW;
-                  const y = (heightCells - 1 - r) * cellH;
-
-                  if (isBlocked) {
-                    return (
-                      <g key={`cell-blk-${r}-${c}`}>
-                        <rect
-                          x={x + 2}
-                          y={y + 2}
-                          width={cellW - 4}
-                          height={cellH - 4}
-                          rx={5}
-                          fill={isDark ? "#27272A" : "#E2E8F0"}
-                          stroke={
-                            isDark
-                              ? "rgba(255,255,255,0.08)"
-                              : "rgba(0,0,0,0.08)"
-                          }
-                          strokeWidth="1"
-                        />
-                        <circle
-                          cx={x + cellW / 2}
-                          cy={y + cellH / 2}
-                          r={Math.min(cellW, cellH) * 0.22}
-                          fill={isDark ? "#52525B" : "#94A3B8"}
-                        />
-                      </g>
-                    );
-                  }
-
-                  const isPodStorage =
-                    r >= 4 &&
-                    r <= heightCells - 5 &&
-                    r !== 10 &&
-                    c > 0 &&
-                    c < widthCells - 1;
-
-                  if (isPodStorage) {
-                    return (
-                      <rect
-                        key={`cell-pod-${r}-${c}`}
-                        x={x + 1.5}
-                        y={y + 1.5}
-                        width={cellW - 3}
-                        height={cellH - 3}
-                        rx={3}
-                        fill={
-                          isDark
-                            ? "rgba(99, 102, 241, 0.05)"
-                            : "rgba(99, 102, 241, 0.035)"
-                        }
-                        stroke={
-                          isDark
-                            ? "rgba(99, 102, 241, 0.12)"
-                            : "rgba(99, 102, 241, 0.08)"
-                        }
-                        strokeWidth="0.5"
-                      />
-                    );
-                  }
-
-                  return (
-                    <rect
-                      key={`cell-grid-${r}-${c}`}
-                      x={x}
-                      y={y}
-                      width={cellW}
-                      height={cellH}
-                      fill="none"
-                      stroke={
-                        isDark
-                          ? "rgba(255, 255, 255, 0.035)"
-                          : "rgba(0, 0, 0, 0.04)"
-                      }
-                      strokeWidth="0.75"
-                    />
-                  );
-                }),
-              )}
-
-            {/* Express Highway Highlights */}
-            {/* Row 2 (Outbound Eastbound) */}
-            <rect
-              x={cellW}
-              y={(heightCells - 1 - 2) * cellH + 1}
-              width={(widthCells - 2) * cellW}
-              height={cellH - 2}
-              fill={
-                isDark ? "rgba(0, 113, 227, 0.12)" : "rgba(0, 113, 227, 0.08)"
-              }
-              rx="4"
-            />
-            {/* Row height - 3 (Inbound Westbound) */}
-            <rect
-              x={cellW}
-              y={(heightCells - 1 - (heightCells - 3)) * cellH + 1}
-              width={(widthCells - 2) * cellW}
-              height={cellH - 2}
-              fill={
-                isDark ? "rgba(16, 185, 129, 0.12)" : "rgba(16, 185, 129, 0.08)"
-              }
-              rx="4"
-            />
-            {/* Row 10 (Central Crossway) */}
-            <rect
-              x={cellW}
-              y={(heightCells - 1 - 10) * cellH + 1}
-              width={(widthCells - 2) * cellW}
-              height={cellH - 2}
-              fill={
-                isDark ? "rgba(245, 158, 11, 0.08)" : "rgba(245, 158, 11, 0.05)"
-              }
-              rx="4"
-            />
-          </g>
-
-          {/* 2. Graph Edges Layer with Directional Vectors */}
-          {topology && (
-            <g className="graph-edges">
-              {topology.edges.map((edge) => {
-                const fromX = (edge.fromColumn + 0.5) * cellW;
-                const fromY = (heightCells - 1 - edge.fromRow + 0.5) * cellH;
-                const toX = (edge.toColumn + 0.5) * cellW;
-                const toY = (heightCells - 1 - edge.toRow + 0.5) * cellH;
-
-                const isOutgoing = activeOutgoingEdges.some(
-                  (e) => e.id === edge.id,
-                );
-                const isIncoming = activeIncomingEdges.some(
-                  (e) => e.id === edge.id,
-                );
-                const isHighlighted = isOutgoing || isIncoming;
-
-                let strokeColor = isDark ? "#52525B" : "#94A3B8";
-                let strokeWidth = 1.2;
-                let strokeOpacity = isDark ? 0.4 : 0.35;
-
-                if (isOutgoing) {
-                  strokeColor = isDark ? "#2997FF" : "#0071E3";
-                  strokeWidth = 2.4;
-                  strokeOpacity = 1.0;
-                } else if (isIncoming) {
-                  strokeColor = isDark ? "#30D158" : "#34C759";
-                  strokeWidth = 2.4;
-                  strokeOpacity = 1.0;
-                } else if (edge.type === "station_feeder") {
-                  strokeColor = isDark ? "#FBBF24" : "#F59E0B";
-                  strokeOpacity = 0.75;
-                  strokeWidth = 1.6;
-                } else if (edge.type === "corridor") {
-                  strokeColor = isDark ? "#60A5FA" : "#0071E3";
-                  strokeOpacity = 0.6;
-                  strokeWidth = 1.5;
-                }
-
-                const midX = (fromX + toX) / 2;
-                const midY = (fromY + toY) / 2;
-                const dx = toX - fromX;
-                const dy = toY - fromY;
-                const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-
-                return (
-                  <g key={`graph-edge-${edge.id}`}>
-                    <line
-                      x1={fromX}
-                      y1={fromY}
-                      x2={toX}
-                      y2={toY}
-                      stroke={strokeColor}
-                      strokeWidth={strokeWidth}
-                      strokeOpacity={strokeOpacity}
-                      strokeLinecap="round"
-                      filter={isHighlighted ? "url(#graphGlow)" : undefined}
-                    />
-                    {showEdgeArrows && edge.direction === "forward" && (
-                      <polygon
-                        points="-2.6,-2 3,0 -2.6,2 -1.2,0"
-                        transform={`translate(${midX}, ${midY}) rotate(${angleDeg})`}
-                        fill={strokeColor}
-                        opacity={
-                          isHighlighted ? 1 : Math.min(0.9, strokeOpacity + 0.4)
-                        }
-                        filter={isHighlighted ? "url(#graphGlow)" : undefined}
-                      />
-                    )}
-                  </g>
-                );
-              })}
-            </g>
-          )}
-
-          {/* 3. Trajectory Path for Selected Robot */}
-          {showTrails && selectedRobot && selectedGoalAssignment && (
-            <g>
-              {(() => {
-                const startPos = worldToScreen(
-                  {
-                    x: selectedRobot.pose.xMeters,
-                    y: selectedRobot.pose.yMeters,
-                  },
-                  mapDim,
-                  baseWidth,
-                  baseHeight,
-                );
-                const goalPoint = cellToWorld(
-                  {
-                    column: selectedGoalAssignment.goalColumn,
-                    row: selectedGoalAssignment.goalRow,
-                  },
-                  resolution,
-                  origin,
-                );
-                const goalPos = worldToScreen(
-                  goalPoint,
-                  mapDim,
-                  baseWidth,
-                  baseHeight,
-                );
-
-                return (
-                  <line
-                    x1={startPos.x}
-                    y1={startPos.y}
-                    x2={goalPos.x}
-                    y2={goalPos.y}
-                    stroke={isDark ? "#2997FF" : "#0071E3"}
-                    strokeWidth="3"
-                    strokeDasharray="6,4"
-                    strokeLinecap="round"
-                    filter="url(#graphGlow)"
-                  />
-                );
-              })()}
-            </g>
-          )}
-
-          {/* 4. Active Order Goals */}
-          {showGoals && (
-            <g>
-              {orders.map((order) =>
-                order.assignments.map((assign, aIdx) => {
-                  const cx = (assign.goalColumn + 0.5) * cellW;
-                  const cy = (heightCells - 1 - assign.goalRow + 0.5) * cellH;
-                  const isSelectedGoal = assign.robotId === selectedRobotId;
-
-                  return (
-                    <g key={`graph-goal-${order.id}-${aIdx}`}>
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={isSelectedGoal ? 14 : 10}
-                        fill={
-                          isSelectedGoal
-                            ? "rgba(0, 113, 227, 0.2)"
-                            : "rgba(0, 113, 227, 0.08)"
-                        }
-                        stroke={isDark ? "#2997FF" : "#0071E3"}
-                        strokeWidth={isSelectedGoal ? "2" : "1.4"}
-                        strokeDasharray="4,3"
-                      />
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r="2.5"
-                        fill={isDark ? "#2997FF" : "#0071E3"}
-                      />
-                    </g>
-                  );
-                }),
-              )}
-            </g>
-          )}
-
-          {/* 5. Graph Vertices / Specialized Station Nodes */}
-          {topology && (
-            <g className="graph-nodes">
-              {topology.nodes.map((node) => {
-                const cx = (node.column + 0.5) * cellW;
-                const cy = (heightCells - 1 - node.row + 0.5) * cellH;
-                const isSelected = selectedNodeId === node.id;
-                const isHovered = hoveredNode?.id === node.id;
-                const ui = getNodeTypeUiMeta(node.type);
-
-                // Waypoint filtering
-                if (node.type === "waypoint" && !showWaypoints) {
-                  return (
-                    <circle
-                      key={`gn-${node.id}`}
-                      cx={cx}
-                      cy={cy}
-                      r="1.5"
-                      fill={isDark ? "#52525B" : "#94A3B8"}
-                      fillOpacity="0.3"
-                    />
-                  );
-                }
-
-                // Station vs Waypoint Dimensions
-                const isStation = node.type !== "waypoint";
-                const isRack = node.type === "rack";
-                const radius = isStation
-                  ? Math.min(12, cellMin * 0.42)
-                  : isSelected || isHovered
-                    ? Math.max(3, cellMin * 0.22)
-                    : Math.max(2, cellMin * 0.14);
-
-                return (
-                  <g
-                    key={`gn-${node.id}`}
-                    className="cursor-pointer group select-none"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedNodeId(node.id);
-                    }}
-                    onMouseEnter={() => setHoveredNode(node)}
-                    onMouseLeave={() => setHoveredNode(null)}
-                  >
-                    {/* Selected Node Glow Halo */}
-                    {isSelected && (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={
-                          isStation
-                            ? radius + Math.min(7, cellMin * 0.25)
-                            : radius + Math.min(5, cellMin * 0.2)
-                        }
-                        fill={ui.glowColor}
-                        fillOpacity="0.3"
-                        stroke={ui.strokeColor}
-                        strokeWidth="2"
-                        filter="url(#graphGlow)"
-                      />
-                    )}
-
-                    {/* Hover Halo */}
-                    {isHovered && !isSelected && (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={isStation ? radius + 3 : radius + 2}
-                        fill={
-                          isDark
-                            ? "rgba(41, 151, 255, 0.2)"
-                            : "rgba(0, 113, 227, 0.15)"
-                        }
-                        stroke={isDark ? "#2997FF" : "#0071E3"}
-                        strokeWidth="1.2"
-                      />
-                    )}
-
-                    {/* Node Base Representation */}
-                    {isRack ? (
-                      <g>
-                        <rect
-                          x={cx - Math.min(12, cellMin * 0.42)}
-                          y={cy - Math.min(10, cellMin * 0.35)}
-                          width={Math.min(24, cellMin * 0.84)}
-                          height={Math.min(20, cellMin * 0.7)}
-                          rx={Math.min(4, cellMin * 0.2)}
-                          fill={isDark ? "rgba(99, 102, 241, 0.25)" : "#EEF2FF"}
-                          stroke={isDark ? "#818CF8" : "#6366F1"}
-                          strokeWidth={isCompact ? "1" : "1.5"}
-                        />
-                        <line
-                          x1={cx - Math.min(10, cellMin * 0.35)}
-                          y1={cy}
-                          x2={cx + Math.min(10, cellMin * 0.35)}
-                          y2={cy}
-                          stroke={
-                            isDark
-                              ? "rgba(165, 180, 252, 0.4)"
-                              : "rgba(99, 102, 241, 0.35)"
-                          }
-                          strokeWidth="0.8"
-                        />
-                      </g>
-                    ) : (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={radius}
-                        fill={
-                          node.type === "pillar"
-                            ? isDark
-                              ? "#3F3F46"
-                              : "#64748B"
-                            : isStation
-                              ? ui.fillColor
-                              : isDark
-                                ? isSelected || isHovered
-                                  ? "#2997FF"
-                                  : "#71717A"
-                                : isSelected || isHovered
-                                  ? "#0071E3"
-                                  : "#94A3B8"
-                        }
-                        stroke={
-                          isStation
-                            ? ui.strokeColor
-                            : isDark
-                              ? "#27272A"
-                              : "#FFFFFF"
-                        }
-                        strokeWidth={
-                          isStation
-                            ? isCompact
-                              ? "1.2"
-                              : "2"
-                            : isSelected || isHovered
-                              ? "1.5"
-                              : "0.8"
-                        }
-                      />
-                    )}
-
-                    {/* Node Specialized Icons */}
-                    {node.type === "charger" && (
-                      <path
-                        d={`M ${cx + 0.8} ${cy - radius * 0.4} L ${cx - radius * 0.25} ${cy + 0.5} L ${cx} ${cy + 0.5} L ${cx - 0.8} ${cy + radius * 0.4} L ${cx + radius * 0.25} ${cy - 0.5} L ${cx} ${cy - 0.5} Z`}
-                        fill={isDark ? "#FBBF24" : "#D97706"}
-                      />
-                    )}
-
-                    {node.type === "pick" && (
-                      <text
-                        x={cx}
-                        y={cy + (isCompact ? 1.5 : 2.5)}
-                        textAnchor="middle"
-                        className={`fill-amber-600 dark:fill-amber-300 font-mono font-black select-none ${
-                          isCompact ? "text-[5px]" : "text-[6.5px]"
-                        }`}
-                      >
-                        {isCompact ? "PK" : "PICK"}
-                      </text>
-                    )}
-
-                    {(node.type === "place" ||
-                      node.type === "workstation" ||
-                      node.type === "chute") && (
-                      <text
-                        x={cx}
-                        y={cy + (isCompact ? 1.5 : 2.5)}
-                        textAnchor="middle"
-                        className={`fill-cyan-600 dark:fill-cyan-300 font-mono font-black select-none ${
-                          isCompact
-                            ? node.type === "chute"
-                              ? "text-[5px]"
-                              : "text-[5px]"
-                            : "text-[6.5px]"
-                        }`}
-                      >
-                        {isCompact
-                          ? node.type === "chute"
-                            ? "CH"
-                            : "PL"
-                          : "PLACE"}
-                      </text>
-                    )}
-
-                    {node.type === "buffer" && (
-                      <text
-                        x={cx}
-                        y={cy + (isCompact ? 2 : 3)}
-                        textAnchor="middle"
-                        className={`fill-purple-600 dark:fill-purple-300 font-bold select-none ${
-                          isCompact ? "text-[6.5px]" : "text-[9px]"
-                        }`}
-                      >
-                        P
-                      </text>
-                    )}
-
-                    {node.type === "pillar" && (
-                      <text
-                        x={cx}
-                        y={cy + (isCompact ? 2 : 3)}
-                        textAnchor="middle"
-                        className={`fill-white font-bold select-none ${
-                          isCompact ? "text-[6px]" : "text-[8px]"
-                        }`}
-                      >
-                        ✕
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
-            </g>
-          )}
-
-          {/* 6. Active Robots on Graph */}
-          <g className="graph-robots">
-            {robots.map((robot) => {
-              const isSelected = robot.id === selectedRobotId;
-              const screenPos = worldToScreen(
-                { x: robot.pose.xMeters, y: robot.pose.yMeters },
-                mapDim,
-                baseWidth,
-                baseHeight,
-              );
-              const rotationDeg = yawToScreenRotationDegrees(
-                robot.pose.yawRadians,
-              );
-
-              const isExecuting = robot.operationalState === "EXECUTING";
-              const isCharging = robot.operationalState === "CHARGING";
-              const isDisconnected = robot.connectivity === "DISCONNECTED";
-              const isSafetyAlert =
-                robot.safety !== "NORMAL" && robot.safety !== "WAIT";
-
-              const robotColor = isDisconnected
-                ? "#FF453A"
-                : isSafetyAlert
-                  ? "#FF9F0A"
-                  : isCharging
-                    ? isDark
-                      ? "#FFD60A"
-                      : "#FF9500"
-                    : isExecuting
-                      ? "#30D158"
-                      : isDark
-                        ? "#2997FF"
-                        : "#0071E3";
-
-              const robotRadius = cellMin * 0.38;
-              const haloRadius = robotRadius * 1.6;
-              const arrowTip = robotRadius * 0.72;
-              const arrowBase = robotRadius * 0.36;
-
-              const shouldShowLabel =
-                isSelected || (showNodeLabels && (!isCompact || zoom >= 1.2));
-              const displayId =
-                isCompact && !isSelected
-                  ? robot.id.replace("robot-", "")
-                  : robot.id;
-
-              return (
-                <g
-                  key={`graph-robot-${robot.id}`}
-                  transform={`translate(${screenPos.x}, ${screenPos.y})`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedRobotId(robot.id);
-                  }}
-                  className="cursor-pointer group select-none"
-                >
-                  {/* Selected Halo */}
-                  {isSelected && (
-                    <circle
-                      cx="0"
-                      cy="0"
-                      r={haloRadius}
-                      fill={
-                        isDark
-                          ? "rgba(41, 151, 255, 0.25)"
-                          : "rgba(0, 113, 227, 0.2)"
-                      }
-                      stroke={isDark ? "#2997FF" : "#0071E3"}
-                      strokeWidth={Math.max(1.5, robotRadius * 0.2)}
-                    />
-                  )}
-
-                  {/* Robot Chassis */}
-                  <circle
-                    cx="0"
-                    cy="0"
-                    r={robotRadius}
-                    fill={isDark ? "#1C1C1E" : "#FFFFFF"}
-                    stroke={robotColor}
-                    strokeWidth={
-                      isSelected
-                        ? Math.max(2.0, robotRadius * 0.25)
-                        : Math.max(1.2, robotRadius * 0.18)
-                    }
-                  />
-
-                  {/* Direction Arrow */}
-                  <g transform={`rotate(${rotationDeg})`}>
-                    <polygon
-                      points={`${arrowTip},0 0,-${arrowBase} ${arrowTip * 0.25},0 0,${arrowBase}`}
-                      fill={robotColor}
-                    />
-                  </g>
-
-                  {/* Center Pivot */}
-                  <circle
-                    cx="0"
-                    cy="0"
-                    r={Math.max(1.2, robotRadius * 0.25)}
-                    fill={robotColor}
-                  />
-
-                  {/* Floating Pill Monospace ID Badge */}
-                  {shouldShowLabel && (
-                    <g
-                      transform={`translate(0, ${robotRadius + (isCompact ? 3 : 5)})`}
-                    >
-                      <rect
-                        x={isCompact ? -14 : -22}
-                        y={isCompact ? -5 : -6}
-                        width={isCompact ? 28 : 44}
-                        height={isCompact ? 10 : 13}
-                        rx={isCompact ? 2.5 : 3.5}
-                        fill={
-                          isDark
-                            ? "rgba(28, 28, 30, 0.95)"
-                            : "rgba(255, 255, 255, 0.95)"
-                        }
-                        stroke={
-                          isSelected
-                            ? isDark
-                              ? "#2997FF"
-                              : "#0071E3"
-                            : isDark
-                              ? "rgba(255, 255, 255, 0.12)"
-                              : "rgba(0, 0, 0, 0.08)"
-                        }
-                        strokeWidth="0.75"
-                      />
-                      <text
-                        x="0"
-                        y={isCompact ? 2.5 : 3}
-                        textAnchor="middle"
-                        className={`${isCompact ? "text-[6.5px]" : "text-[8px]"} font-mono font-bold select-none ${
-                          isSelected
-                            ? isDark
-                              ? "fill-[#2997FF]"
-                              : "fill-[#0071E3]"
-                            : isDark
-                              ? "fill-[#F5F5F7]"
-                              : "fill-[#1D1D1F]"
-                        }`}
-                      >
-                        {displayId}
-                      </text>
-                    </g>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full block absolute inset-0 touch-none"
+        />
 
         {/* 3. Live Coordinate Tracker Overlay (Top Left) */}
         {hoverCoord && (
@@ -1399,39 +1481,13 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                     }
                     className="px-2 py-1 text-[10px] font-bold text-white bg-[#0071E3] rounded-lg hover:bg-[#0077ED] transition-all cursor-pointer font-sans"
                   >
-                    Inspect
+                    Focus
                   </button>
                 </div>
               )}
             </div>
           </div>
         )}
-
-        {/* 5. Bottom Status HUD Pill */}
-        <div className="absolute bottom-2.5 left-2.5 z-10 flex items-center gap-1.5 bg-white/80 dark:bg-[#1C1C1E]/80 text-[#1D1D1F] dark:text-[#F5F5F7] px-2.5 py-1 rounded-full text-[10px] font-mono backdrop-blur-md shadow-xs border border-black/[0.06] dark:border-white/[0.08] transition-all select-none">
-          <div className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#34C759]" />
-            <span className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Graph Topology
-            </span>
-          </div>
-
-          <span className="text-black/15 dark:text-white/15">•</span>
-          <span className="text-[#86868B] dark:text-[#A1A1A6] tabular-nums">
-            {topology?.nodes.length || 0} Nodes · {topology?.edges.length || 0}{" "}
-            Edges
-          </span>
-
-          <span className="text-black/15 dark:text-white/15">•</span>
-          <span className="text-[#0071E3] dark:text-[#2997FF] font-medium tabular-nums">
-            {robots.length} Units
-          </span>
-
-          <span className="text-black/15 dark:text-white/15">•</span>
-          <span className="text-[#86868B] dark:text-[#A1A1A6] tabular-nums">
-            {(zoom * 100).toFixed(0)}%
-          </span>
-        </div>
       </div>
     </div>
   );
