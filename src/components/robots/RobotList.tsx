@@ -1,4 +1,4 @@
-import React, { useState, useMemo, memo } from "react";
+import React, { useState, useMemo, useEffect, useRef, memo } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
 import {
@@ -292,6 +292,7 @@ const RobotCard = memo<RobotCardProps>(
       <div
         role="button"
         tabIndex={0}
+        data-robot-id={robot.id}
         onClick={() => onSelect(isSelected ? "" : robot.id)}
         className={`p-3 sm:p-3.5 rounded-2xl border transition-all cursor-pointer outline-none ${
           isSelected
@@ -394,11 +395,18 @@ export const RobotList: React.FC<RobotListProps> = ({ embedded = false }) => {
 
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [filterState, setFilterState] = useState<string>("ALL");
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
 
   const robots = useMemo(() => snapshot?.robots || [], [snapshot?.robots]);
 
   const filteredRobots = useMemo(() => {
     return robots.filter((r) => {
+      // If robot is currently selected by the operator (e.g. from map or search),
+      // keep it visible so operator can inspect it without having to clear filters
+      if (selectedRobotId && r.id === selectedRobotId) {
+        return true;
+      }
+
       const matchesSearch =
         searchQuery === "" ||
         r.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -415,7 +423,27 @@ export const RobotList: React.FC<RobotListProps> = ({ embedded = false }) => {
 
       return matchesSearch && matchesFilter;
     });
-  }, [robots, searchQuery, filterState]);
+  }, [robots, searchQuery, filterState, selectedRobotId]);
+
+  // Auto-scroll to selected robot card when operator selects a robot (e.g. from map click)
+  useEffect(() => {
+    if (!selectedRobotId || !listContainerRef.current) return;
+
+    // Small timeout ensures DOM layout and accordion expansion are settled
+    const timeoutId = window.setTimeout(() => {
+      const selectedEl = listContainerRef.current?.querySelector<HTMLElement>(
+        `[data-robot-id="${selectedRobotId}"]`,
+      );
+      if (selectedEl) {
+        selectedEl.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      }
+    }, 60);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedRobotId]);
 
   const nodeUiMeta = selectedNode ? getNodeTypeUiMeta(selectedNode.type) : null;
 
@@ -539,6 +567,7 @@ export const RobotList: React.FC<RobotListProps> = ({ embedded = false }) => {
 
       {/* Scrollable Robot Cards Container with Accordion Expand */}
       <div
+        ref={listContainerRef}
         role="listbox"
         aria-label="Fleet robots list"
         className="flex-1 overflow-y-auto space-y-2.5 pr-1 relative"

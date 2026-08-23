@@ -1,18 +1,13 @@
-import React from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
-import {
-  ShieldAlert,
-  AlertTriangle,
-  WifiOff,
-  CheckCircle2,
-  Info,
-} from "lucide-react";
+import { ShieldAlert, AlertTriangle, WifiOff, Info, X } from "lucide-react";
 import { formatStateAge } from "../../utils/time/time.ts";
 
 export const IncidentStrip: React.FC = () => {
   const { t } = useAppConfig();
   const { snapshot, diagnostics, connectionState } = useOperations();
+  const [isDismissed, setIsDismissed] = useState<boolean>(false);
 
   const robots = snapshot?.robots || [];
   const safetyRobots = robots.filter(
@@ -39,85 +34,136 @@ export const IncidentStrip: React.FC = () => {
     hasGap ||
     hasConflict;
 
-  if (!hasIncidents) {
+  // Generate a composite signature of active incident state so that new incidents un-dismiss the banner
+  const incidentSignature = `${safetyRobots.length}-${disconnectedRobots.length}-${freshness}-${diagnostics.gapCount}-${diagnostics.conflictCount}`;
+
+  useEffect(() => {
+    setIsDismissed(false);
+  }, [incidentSignature]);
+
+  // Helper to format concise robot ID lists (e.g. "robot-01, robot-02 (+4)")
+  const formatRobotList = (list: typeof robots, maxShow: number = 2) => {
+    if (list.length === 0) return "";
+    if (list.length <= maxShow) {
+      return list.map((r) => r.id).join(", ");
+    }
+    const visible = list
+      .slice(0, maxShow)
+      .map((r) => r.id)
+      .join(", ");
+    return `${visible} (+${list.length - maxShow})`;
+  };
+
+  const safetySummary = useMemo(() => {
+    if (safetyRobots.length === 0) return "";
+    const distinctSafeties = Array.from(
+      new Set(safetyRobots.map((r) => r.safety)),
+    ).join(", ");
+    return `${safetyRobots.length} ${t("incidentSafetyActive")}: ${formatRobotList(safetyRobots, 2)} (${distinctSafeties})`;
+  }, [safetyRobots, t]);
+
+  const disconnectedSummary = useMemo(() => {
+    if (disconnectedRobots.length === 0) return "";
+    return `${disconnectedRobots.length} ${t("incidentDisconnectedAlert")} (${formatRobotList(disconnectedRobots, 2)})`;
+  }, [disconnectedRobots, t]);
+
+  if (!hasIncidents || isDismissed) {
     return null;
   }
 
   return (
     <div
       role="alert"
-      className="w-full bg-[#FF9500]/10 dark:bg-[#FF9F0A]/15 border border-[#FF9500]/25 dark:border-[#FF9F0A]/30 rounded-xl p-2.5 sm:px-3.5 sm:py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[#C93400] dark:text-[#FF9F0A] text-xs transition-all duration-200 animate-fade-in"
+      className="fixed top-16 sm:top-18 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-1.5rem)] sm:w-[calc(100%-3rem)] max-w-[1920px] pointer-events-none transition-all duration-300 ease-out animate-fade-in"
     >
-      <div className="flex flex-wrap items-center gap-2.5">
-        {/* Safety Alert */}
-        {safetyRobots.length > 0 && (
-          <div className="flex items-center gap-1.5 font-bold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 px-2.5 py-1 rounded-xl">
-            <ShieldAlert className="w-4 h-4 shrink-0" />
-            <span>
-              {t("incidentSafetyActive")}:{" "}
-              {safetyRobots.map((r) => r.id).join(", ")} (
-              {safetyRobots.map((r) => r.safety).join(", ")})
-            </span>
-          </div>
-        )}
+      <div className="pointer-events-auto bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-[#FF9500]/30 dark:border-[#FF9F0A]/35 shadow-2xl rounded-2xl p-2 sm:px-3.5 sm:py-2 flex items-center justify-between gap-2.5 text-[#C93400] dark:text-[#FF9F0A] text-xs ring-1 ring-black/5 dark:ring-white/10 overflow-hidden">
+        {/* Left: Responsive Alert Badges */}
+        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-hidden">
+          {/* Safety Alert */}
+          {safetyRobots.length > 0 && (
+            <div
+              title={safetyRobots
+                .map((r) => `${r.id} (${r.safety})`)
+                .join("\n")}
+              className="flex items-center gap-1.5 font-bold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 px-2.5 py-1 rounded-xl max-w-full truncate shrink-0"
+            >
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span className="truncate">{safetySummary}</span>
+            </div>
+          )}
 
-        {/* Disconnected Alert */}
-        {disconnectedRobots.length > 0 && (
-          <div className="flex items-center gap-1.5 font-semibold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/10 dark:bg-[#FF453A]/15 px-2.5 py-1 rounded-xl">
-            <WifiOff className="w-4 h-4 shrink-0" />
-            <span>
-              {disconnectedRobots.length} {t("incidentDisconnectedAlert")} (
-              {disconnectedRobots.map((r) => r.id).join(", ")})
-            </span>
-          </div>
-        )}
+          {/* Disconnected Alert */}
+          {disconnectedRobots.length > 0 && (
+            <div
+              title={disconnectedRobots.map((r) => r.id).join("\n")}
+              className="flex items-center gap-1.5 font-semibold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/10 dark:bg-[#FF453A]/15 px-2.5 py-1 rounded-xl max-w-full truncate shrink-0"
+            >
+              <WifiOff className="w-4 h-4 shrink-0" />
+              <span className="truncate">{disconnectedSummary}</span>
+            </div>
+          )}
 
-        {/* Stale Alert */}
-        {isStale && (
-          <div className="flex items-center gap-1.5 font-semibold text-[#C93400] dark:text-[#FF9F0A] bg-[#FF9500]/15 dark:bg-[#FF9F0A]/20 px-2.5 py-1 rounded-xl">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>
-              {t("incidentStaleWarning")}{" "}
-              {snapshot?.snapshotAt
-                ? `(age: ${formatStateAge(snapshot.snapshotAt)})`
-                : ""}
-            </span>
-          </div>
-        )}
+          {/* Stale Alert */}
+          {isStale && (
+            <div className="flex items-center gap-1.5 font-semibold text-[#C93400] dark:text-[#FF9F0A] bg-[#FF9500]/15 dark:bg-[#FF9F0A]/20 px-2.5 py-1 rounded-xl shrink-0">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                {t("incidentStaleWarning")}{" "}
+                {snapshot?.snapshotAt
+                  ? `(${formatStateAge(snapshot.snapshotAt)})`
+                  : ""}
+              </span>
+            </div>
+          )}
 
-        {/* Gap Alert */}
-        {hasGap && (
-          <div className="flex items-center gap-1.5 font-bold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 px-2.5 py-1 rounded-xl">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>
-              {t("incidentGapWarning")} (expected: #
-              {diagnostics.lastGapDetails?.expected}, received: #
-              {diagnostics.lastGapDetails?.received})
-            </span>
-          </div>
-        )}
+          {/* Gap Alert */}
+          {hasGap && (
+            <div className="flex items-center gap-1.5 font-bold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 px-2.5 py-1 rounded-xl shrink-0">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                {t("incidentGapWarning")} (exp: #
+                {diagnostics.lastGapDetails?.expected}, rcv: #
+                {diagnostics.lastGapDetails?.received})
+              </span>
+            </div>
+          )}
 
-        {/* Conflict Alert */}
-        {hasConflict && (
-          <div className="flex items-center gap-1.5 font-bold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 px-2.5 py-1 rounded-xl">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>
-              {t("incidentConflictWarning")}: {diagnostics.lastConflictReason}
-            </span>
-          </div>
-        )}
+          {/* Conflict Alert */}
+          {hasConflict && (
+            <div
+              title={diagnostics.lastConflictReason}
+              className="flex items-center gap-1.5 font-bold text-[#D70015] dark:text-[#FF453A] bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 px-2.5 py-1 rounded-xl max-w-xs sm:max-w-md truncate shrink-0"
+            >
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                {t("incidentConflictWarning")}: {diagnostics.lastConflictReason}
+              </span>
+            </div>
+          )}
 
-        {/* Partial Alert */}
-        {isPartial && (
-          <div className="flex items-center gap-1.5 font-semibold text-[#0071E3] dark:text-[#2997FF] bg-[#0071E3]/15 dark:bg-[#2997FF]/20 px-2.5 py-1 rounded-xl">
-            <Info className="w-4 h-4 shrink-0" />
-            <span>{t("incidentPartialWarning")}</span>
-          </div>
-        )}
-      </div>
+          {/* Partial Alert */}
+          {isPartial && (
+            <div className="flex items-center gap-1.5 font-semibold text-[#0071E3] dark:text-[#2997FF] bg-[#0071E3]/15 dark:bg-[#2997FF]/20 px-2.5 py-1 rounded-xl shrink-0">
+              <Info className="w-4 h-4 shrink-0" />
+              <span>{t("incidentPartialWarning")}</span>
+            </div>
+          )}
+        </div>
 
-      <div className="text-[11px] font-mono opacity-85 sm:text-right shrink-0">
-        Status: <span className="font-bold uppercase">{freshness}</span>
+        {/* Right: Status Pill & Close Button */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
+          <div className="text-[11px] font-mono opacity-90 px-2 py-0.5 rounded-lg bg-black/5 dark:bg-white/10 shrink-0">
+            <span className="font-bold uppercase">{freshness}</span>
+          </div>
+          <button
+            onClick={() => setIsDismissed(true)}
+            className="p-1 sm:p-1.5 rounded-lg text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+            title="Dismiss notification"
+            aria-label="Dismiss notification"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );

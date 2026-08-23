@@ -1,25 +1,26 @@
-/**
- * Pure state machine and stream reducer for MAPF-RL state reconciliation.
- */
+/** Pure reconciliation state machine for the canonical Core operations stream. */
 
 import type { AuthoritativeSnapshot } from "../../domain/snapshot/types.ts";
-import type { Robot } from "../../domain/robot/types.ts";
-import type { Order } from "../../domain/order/types.ts";
+import type {
+  ConnectivityState,
+  FreshnessState,
+  Robot,
+} from "../../domain/robot/types.ts";
+import type { Order, OrderLifecycleState } from "../../domain/order/types.ts";
 import type {
   StreamEnvelope,
   ReconciliationState,
   ReconciliationDecision,
   ReconciliationDiagnostics,
-  RobotStateReportPayload,
-  RobotEventReportPayload,
   OperationsEventPayload,
   ConnectionState,
   StreamTransportMode,
 } from "../../domain/event/types.ts";
 import {
-  adaptRobotStateReport,
   adaptOperationsEvent,
+  adaptRobotStateReport,
 } from "../../contracts/adapters/eventAdapter.ts";
+import { adaptRasterMap } from "../../contracts/adapters/mapAdapter.ts";
 
 export type ReconciliationAction =
   | {
@@ -27,6 +28,7 @@ export type ReconciliationAction =
       snapshot: AuthoritativeSnapshot;
       bufferedEvents?: StreamEnvelope[];
     }
+  | { type: "SNAPSHOT_LOAD_FAILED" }
   | { type: "STREAM_EVENT_RECEIVED"; event: StreamEnvelope }
   | { type: "STREAM_BATCH_RECEIVED"; events: StreamEnvelope[] }
   | { type: "CONNECTION_STATE_CHANGED"; connectionState: ConnectionState }
@@ -49,49 +51,23 @@ export const INITIAL_RECONCILIATION_STATE: ReconciliationState = {
   snapshot: null,
   connectionState: "LoadingSnapshot",
   transportMode: "FIXTURE_STREAM",
-  cursor: {
-    streamId: "operations",
-    eventSequence: 0,
-  },
+  cursor: { streamId: "operations", eventSequence: 0 },
   diagnostics: INITIAL_DIAGNOSTICS,
 };
 
-/**
- * Checks if two robot poses and basic attributes are strictly identical.
- */
-function isRobotStateIdentical(
-  robot: Robot,
-  payload: RobotStateReportPayload,
-): boolean {
-  return (
-    robot.pose.xMeters === payload.pose.xMeters &&
-    robot.pose.yMeters === payload.pose.yMeters &&
-    robot.pose.yawRadians === payload.pose.yawRadians &&
-    robot.operationalState === payload.operationalState &&
-    robot.connectivity === payload.connectivity &&
-    robot.safety === payload.safety &&
-    robot.activeController.mode === payload.activeController.mode &&
-    robot.activeController.identity === payload.activeController.identity &&
-    (payload.batteryPercent === undefined ||
-      robot.batteryPercent === payload.batteryPercent)
-  );
-}
-
-/**
- * Applies a single stream event to the current snapshot.
- * Returns the updated snapshot, the decision taken, and any conflict reason.
- */
-export function applySingleEvent(
-  snapshot: AuthoritativeSnapshot | null,
-  event: StreamEnvelope,
-  currentSequence: number,
-): {
+interface ApplyResult {
   nextSnapshot: AuthoritativeSnapshot | null;
   decision: ReconciliationDecision;
   nextSequence: number;
   conflictReason?: string;
   gapDetails?: { expected: number; received: number };
-} {
+}
+
+export function applySingleEvent(
+  snapshot: AuthoritativeSnapshot | null,
+  event: StreamEnvelope,
+  currentSequence: number,
+): ApplyResult {
   if (!snapshot) {
     return {
       nextSnapshot: null,
@@ -99,666 +75,551 @@ export function applySingleEvent(
       nextSequence: currentSequence,
     };
   }
-
-  const seq = event.eventSequence;
-
-  // 1. GAP CHECK: If sequence is greater than next expected sequence
-  if (seq > currentSequence + 1) {
+  const sequence = event.eventSequence;
+  if (sequence > currentSequence + 1) {
     return {
-      nextSnapshot: {
-        ...snapshot,
-        freshness: "RECONCILING",
-      },
+      nextSnapshot: { ...snapshot, freshness: "RECONCILING" },
       decision: "GAP",
       nextSequence: currentSequence,
-      gapDetails: {
-        expected: currentSequence + 1,
-        received: seq,
-      },
+      gapDetails: { expected: currentSequence + 1, received: sequence },
     };
   }
 
-  // 2. STALE / DUPLICATE CHECK: If sequence is less than or equal to currentSequence
-  if (seq <= currentSequence) {
-    // Check specific payload entities for duplicate vs stale vs conflict
-    if (event.messageType === "robot.state.report") {
-      const payload = adaptRobotStateReport(
-        event.payload as Record<string, unknown>,
-      );
-      const existingRobot = snapshot.robots.find(
-        (r) => r.id === payload.robotId,
-      );
+  const operation =
+    event.messageType === "operations.event"
+      ? adaptOperationsEvent(event.payload as Record<string, unknown>)
+      : null;
+  if (sequence <= currentSequence) {
+    return classifyAlreadyObserved(snapshot, operation, currentSequence);
+  }
+  if (!operation) {
+    return {
+      nextSnapshot: advanceCursor(snapshot, sequence),
+      decision: "APPLIED",
+      nextSequence: sequence,
+    };
+  }
 
-      if (existingRobot) {
-        if (payload.stateVersion < existingRobot.stateVersion) {
-          return {
-            nextSnapshot: snapshot,
-            decision: "STALE",
-            nextSequence: currentSequence,
-          };
-        }
-
-        if (payload.stateVersion === existingRobot.stateVersion) {
-          if (isRobotStateIdentical(existingRobot, payload)) {
-            return {
-              nextSnapshot: snapshot,
-              decision: "DUPLICATE",
-              nextSequence: currentSequence,
-            };
-          } else {
-            // Same stateVersion with differing content -> Conflict!
-            return {
-              nextSnapshot: {
-                ...snapshot,
-                freshness: "RECONCILING",
-              },
-              decision: "CONFLICT",
-              nextSequence: currentSequence,
-              conflictReason: `Conflicting robot state for ${payload.robotId} at version ${payload.stateVersion}`,
-            };
-          }
-        }
-      }
-    } else if (event.messageType === "operations.event") {
-      const payload = adaptOperationsEvent(
-        event.payload as Record<string, unknown>,
-      );
-      if (payload.entityType === "ORDER") {
-        const existingOrder = snapshot.orders.find(
-          (o) => o.id === payload.entityId,
-        );
-        if (existingOrder && payload.orderUpdateId !== undefined) {
-          if (payload.orderUpdateId < existingOrder.orderUpdateId) {
-            return {
-              nextSnapshot: snapshot,
-              decision: "STALE",
-              nextSequence: currentSequence,
-            };
-          }
-          if (payload.orderUpdateId === existingOrder.orderUpdateId) {
-            if (
-              payload.state === undefined ||
-              payload.state === existingOrder.state
-            ) {
-              return {
-                nextSnapshot: snapshot,
-                decision: "DUPLICATE",
-                nextSequence: currentSequence,
-              };
-            } else {
-              return {
-                nextSnapshot: {
-                  ...snapshot,
-                  freshness: "RECONCILING",
-                },
-                decision: "CONFLICT",
-                nextSequence: currentSequence,
-                conflictReason: `Conflicting order state for ${payload.entityId} at updateId ${payload.orderUpdateId}`,
-              };
-            }
-          }
-        }
-      }
+  const existing = snapshot.entityVersions[entityKey(operation)];
+  if (existing && operation.entityVersion < existing.version) {
+    return {
+      nextSnapshot: advanceCursor(snapshot, sequence),
+      decision: "STALE",
+      nextSequence: sequence,
+    };
+  }
+  if (existing && operation.entityVersion === existing.version) {
+    if (operation.contentDigestSha256 === existing.contentDigestSha256) {
+      return {
+        nextSnapshot: advanceCursor(snapshot, sequence),
+        decision: "DUPLICATE",
+        nextSequence: sequence,
+      };
     }
+    return entityConflict(snapshot, currentSequence, operation);
+  }
 
-    // Default duplicate for matching/older sequence
+  const applied = applyOperation(snapshot, event, operation);
+  return {
+    nextSnapshot: advanceCursor(applied, sequence),
+    decision: "APPLIED",
+    nextSequence: sequence,
+  };
+}
+
+function classifyAlreadyObserved(
+  snapshot: AuthoritativeSnapshot,
+  operation: OperationsEventPayload | null,
+  currentSequence: number,
+): ApplyResult {
+  if (!operation) {
     return {
       nextSnapshot: snapshot,
       decision: "DUPLICATE",
       nextSequence: currentSequence,
     };
   }
-
-  // 3. APPLIED: Strictly consecutive sequence (seq === currentSequence + 1)
-  let updatedRobots = snapshot.robots;
-  let updatedOrders = snapshot.orders;
-
-  if (event.messageType === "robot.state.report") {
-    const payload = adaptRobotStateReport(
-      event.payload as Record<string, unknown>,
-    );
-    const existingIndex = snapshot.robots.findIndex(
-      (r) => r.id === payload.robotId,
-    );
-
-    const newRobot: Robot = {
-      id: payload.robotId,
-      stateVersion: payload.stateVersion,
-      simulationTimeMs: payload.simulationTimeMs,
-      occurredAtUtc: event.occurredAt,
-      pose: payload.pose,
-      operationalState: payload.operationalState,
-      connectivity: payload.connectivity,
-      freshness: "CURRENT",
-      safety: payload.safety,
-      activeController: payload.activeController,
-      currentOrderId: payload.orderId,
-      orderUpdateId: payload.orderUpdateId,
-      sessionEpoch: payload.sessionEpoch,
-      simulatorId: payload.simulatorId,
-      batteryPercent: payload.batteryPercent ?? 100,
+  const existing = snapshot.entityVersions[entityKey(operation)];
+  if (existing && operation.entityVersion < existing.version) {
+    return {
+      nextSnapshot: snapshot,
+      decision: "STALE",
+      nextSequence: currentSequence,
     };
-
-    if (existingIndex >= 0) {
-      const existingRobot = snapshot.robots[existingIndex];
-      // Check for conflict
-      if (
-        payload.stateVersion === existingRobot.stateVersion &&
-        !isRobotStateIdentical(existingRobot, payload)
-      ) {
-        return {
-          nextSnapshot: {
-            ...snapshot,
-            freshness: "RECONCILING",
-          },
-          decision: "CONFLICT",
-          nextSequence: currentSequence,
-          conflictReason: `Conflicting robot state for ${payload.robotId} at version ${payload.stateVersion}`,
-        };
-      }
-
-      updatedRobots = [...snapshot.robots];
-      updatedRobots[existingIndex] = newRobot;
-    } else {
-      updatedRobots = [...snapshot.robots, newRobot];
-    }
-  } else if (event.messageType === "robot.event.report") {
-    const payload = event.payload as unknown as RobotEventReportPayload;
-    const existingIndex = snapshot.robots.findIndex(
-      (r) => r.id === payload.robotId,
-    );
-
-    if (existingIndex >= 0) {
-      const robot = snapshot.robots[existingIndex];
-      let newSafety = robot.safety;
-      let newOperational = robot.operationalState;
-
-      if (
-        payload.eventType === "SAFETY_STOP" ||
-        payload.eventType === "EMERGENCY_STOP"
-      ) {
-        newSafety =
-          payload.eventType === "EMERGENCY_STOP"
-            ? "EMERGENCY_STOP"
-            : "CONTROLLED_STOP";
-        newOperational = "STOPPED";
-      } else if (payload.eventType === "SAFETY_RESUME") {
-        newSafety = "NORMAL";
-        newOperational = "IDLE";
-      }
-
-      updatedRobots = [...snapshot.robots];
-      updatedRobots[existingIndex] = {
-        ...robot,
-        safety: newSafety,
-        operationalState: newOperational,
-        occurredAtUtc: event.occurredAt,
-      };
-    }
-  } else if (event.messageType === "operations.event") {
-    const payload = adaptOperationsEvent(
-      event.payload as Record<string, unknown>,
-    );
-
-    if (payload.entityType === "ORDER") {
-      const existingIndex = snapshot.orders.findIndex(
-        (o) => o.id === payload.entityId,
-      );
-
-      if (existingIndex >= 0) {
-        const order = snapshot.orders[existingIndex];
-        const nextOrderUpdateId =
-          payload.orderUpdateId !== undefined
-            ? payload.orderUpdateId
-            : order.orderUpdateId + 1;
-
-        const updatedOrder: Order = {
-          ...order,
-          state: payload.state || order.state,
-          orderUpdateId: nextOrderUpdateId,
-          planRevisionId: payload.planRevisionId || order.planRevisionId,
-          assignments: payload.assignments || order.assignments,
-          updatedAtUtc: payload.occurredAt || event.occurredAt,
-        };
-
-        updatedOrders = [...snapshot.orders];
-        updatedOrders[existingIndex] = updatedOrder;
-      } else if (payload.entityId) {
-        const newOrder: Order = {
-          id: payload.entityId,
-          orderUpdateId: payload.orderUpdateId ?? 0,
-          planRevisionId: payload.planRevisionId,
-          state: payload.state || "Submitted",
-          assignments: payload.assignments || [],
-          submittedAtUtc: payload.occurredAt || event.occurredAt,
-          updatedAtUtc: payload.occurredAt || event.occurredAt,
-        };
-        updatedOrders = [...snapshot.orders, newOrder];
-      }
-    }
   }
-
-  const nextSnapshot: AuthoritativeSnapshot = {
-    ...snapshot,
-    cursor: {
-      streamId: snapshot.cursor.streamId,
-      eventSequence: seq,
-    },
-    freshness: "CURRENT",
-    robots: updatedRobots,
-    orders: updatedOrders,
-  };
-
+  if (
+    existing &&
+    operation.entityVersion === existing.version &&
+    operation.contentDigestSha256 !== existing.contentDigestSha256
+  ) {
+    return entityConflict(snapshot, currentSequence, operation);
+  }
+  if (existing && operation.entityVersion > existing.version) {
+    return entityConflict(snapshot, currentSequence, operation);
+  }
   return {
-    nextSnapshot,
-    decision: "APPLIED",
-    nextSequence: seq,
+    nextSnapshot: snapshot,
+    decision: "DUPLICATE",
+    nextSequence: currentSequence,
   };
 }
 
-/**
- * Coalesces multiple robot state reports in a batch so that only the latest version per robot is processed.
- */
+function entityConflict(
+  snapshot: AuthoritativeSnapshot,
+  currentSequence: number,
+  operation: OperationsEventPayload,
+): ApplyResult {
+  return {
+    nextSnapshot: { ...snapshot, freshness: "RECONCILING" },
+    decision: "CONFLICT",
+    nextSequence: currentSequence,
+    conflictReason: `Conflicting ${operation.entityType} ${operation.entityId} at entityVersion ${operation.entityVersion}`,
+  };
+}
+
+function applyOperation(
+  snapshot: AuthoritativeSnapshot,
+  event: StreamEnvelope,
+  operation: OperationsEventPayload,
+): AuthoritativeSnapshot {
+  let next = snapshot;
+  if (operation.entityType === "MAP") {
+    const map = adaptRasterMap(operation.data);
+    if (
+      map.mapId !== operation.entityId ||
+      map.revision !== operation.entityVersion ||
+      map.contentDigestSha256 !== operation.contentDigestSha256
+    ) {
+      throw new Error(
+        "MAP operations event identity does not match payload.data",
+      );
+    }
+    next = { ...next, map };
+  } else if (operation.entityType === "ROBOT") {
+    next = applyRobot(next, event, operation);
+  } else if (operation.entityType === "ORDER") {
+    next = applyOrder(next, event, operation);
+  } else if (operation.entityType === "CONNECTIVITY") {
+    next = applyConnectivity(next, operation);
+  } else if (operation.entityType === "INCIDENT") {
+    next = applyIncident(next, event, operation);
+  }
+  return {
+    ...next,
+    entityVersions: {
+      ...next.entityVersions,
+      [entityKey(operation)]: {
+        version: operation.entityVersion,
+        contentDigestSha256: operation.contentDigestSha256,
+      },
+    },
+  };
+}
+
+function applyRobot(
+  snapshot: AuthoritativeSnapshot,
+  event: StreamEnvelope,
+  operation: OperationsEventPayload,
+): AuthoritativeSnapshot {
+  const payload = adaptRobotStateReport({
+    ...operation.data,
+    robotId: operation.entityId,
+    stateVersion: operation.entityVersion,
+  });
+  const existing = snapshot.robots.find(
+    (robot) => robot.id === operation.entityId,
+  );
+  const robot: Robot = {
+    id: operation.entityId,
+    contentDigestSha256: operation.contentDigestSha256,
+    stateVersion: operation.entityVersion,
+    simulationTimeMs: payload.simulationTimeMs,
+    occurredAtUtc:
+      typeof operation.data.observedAt === "string"
+        ? operation.data.observedAt
+        : event.occurredAt,
+    pose: payload.pose,
+    operationalState: payload.operationalState,
+    connectivity: payload.connectivity,
+    freshness: "CURRENT",
+    safety: payload.safety,
+    activeController: payload.activeController,
+    currentOrderId: payload.orderId,
+    orderUpdateId: payload.orderUpdateId,
+    sessionEpoch: payload.sessionEpoch,
+    simulatorId: payload.simulatorId,
+    batteryPercent: payload.batteryPercent ?? existing?.batteryPercent ?? 100,
+  };
+  return {
+    ...snapshot,
+    robots: existing
+      ? snapshot.robots.map((value) => (value.id === robot.id ? robot : value))
+      : [...snapshot.robots, robot],
+  };
+}
+
+const ORDER_STATES = new Set<OrderLifecycleState>([
+  "Submitted",
+  "Planning",
+  "Dispatchable",
+  "Dispatched",
+  "Applied",
+  "Executing",
+  "Replanning",
+  "Held",
+  "Cancelling",
+  "Completed",
+  "Cancelled",
+  "Rejected",
+]);
+
+function applyOrder(
+  snapshot: AuthoritativeSnapshot,
+  event: StreamEnvelope,
+  operation: OperationsEventPayload,
+): AuthoritativeSnapshot {
+  const data = operation.data;
+  const existing = snapshot.orders.find(
+    (order) => order.id === operation.entityId,
+  );
+  const rawState = String(data.state || existing?.state || "Submitted");
+  const state = ORDER_STATES.has(rawState as OrderLifecycleState)
+    ? (rawState as OrderLifecycleState)
+    : existing?.state || "Submitted";
+  const assignments = Array.isArray(data.assignments)
+    ? data.assignments.map((value: any) => ({
+        robotId: String(value.robotId || ""),
+        goalColumn: Number(value.goalColumn) || 0,
+        goalRow: Number(value.goalRow) || 0,
+      }))
+    : existing?.assignments || [];
+  const map = data.map as Record<string, unknown> | undefined;
+  const order: Order = {
+    id: operation.entityId,
+    entityVersion: operation.entityVersion,
+    contentDigestSha256: operation.contentDigestSha256,
+    orderUpdateId:
+      typeof data.orderUpdateId === "number"
+        ? data.orderUpdateId
+        : existing?.orderUpdateId || 0,
+    planRevisionId:
+      typeof data.planRevisionId === "string"
+        ? data.planRevisionId
+        : existing?.planRevisionId,
+    state,
+    assignments,
+    mapId:
+      typeof data.mapId === "string"
+        ? data.mapId
+        : typeof map?.mapId === "string"
+          ? map.mapId
+          : existing?.mapId,
+    mapRevision:
+      typeof data.mapRevision === "number"
+        ? data.mapRevision
+        : typeof map?.revision === "number"
+          ? map.revision
+          : existing?.mapRevision,
+    submittedAtUtc: existing?.submittedAtUtc || event.occurredAt,
+    updatedAtUtc:
+      typeof data.updatedAt === "string" ? data.updatedAt : event.occurredAt,
+  };
+  return {
+    ...snapshot,
+    orders: existing
+      ? snapshot.orders.map((value) => (value.id === order.id ? order : value))
+      : [...snapshot.orders, order],
+  };
+}
+
+function applyConnectivity(
+  snapshot: AuthoritativeSnapshot,
+  operation: OperationsEventPayload,
+): AuthoritativeSnapshot {
+  const state = String(operation.data.state || "NotReady");
+  const connectivity: ConnectivityState =
+    state === "Synchronized"
+      ? "CONNECTED"
+      : state === "Degraded"
+        ? "DISCONNECTED"
+        : "DEGRADED";
+  const freshness: FreshnessState =
+    connectivity === "CONNECTED" ? "CURRENT" : "STALE";
+  const robots = snapshot.robots.map((robot) =>
+    robot.simulatorId === operation.entityId
+      ? {
+          ...robot,
+          sessionEpoch:
+            typeof operation.data.sessionEpoch === "number"
+              ? operation.data.sessionEpoch
+              : robot.sessionEpoch,
+          connectivity,
+          freshness,
+          operationalState:
+            connectivity === "DISCONNECTED"
+              ? "STOPPED"
+              : robot.operationalState,
+        }
+      : robot,
+  );
+  return {
+    ...snapshot,
+    robots,
+    freshness:
+      connectivity === "DISCONNECTED" ? "DISCONNECTED" : snapshot.freshness,
+  };
+}
+
+function applyIncident(
+  snapshot: AuthoritativeSnapshot,
+  event: StreamEnvelope,
+  operation: OperationsEventPayload,
+): AuthoritativeSnapshot {
+  const robotId =
+    typeof operation.data.robotId === "string" ? operation.data.robotId : null;
+  const code = String(operation.data.code || "");
+  if (!robotId || code === "ORDER_COMPLETED") return snapshot;
+  const robots = snapshot.robots.map((robot) => {
+    if (robot.id !== robotId) return robot;
+    let safety = robot.safety;
+    if (code.includes("EMERGENCY")) safety = "EMERGENCY_STOP";
+    else if (code.includes("FAULT")) safety = "FAULT";
+    else if (code.includes("REJECT")) safety = "REJECT";
+    else if (code.includes("STOP") || code.includes("COLLISION")) {
+      safety = "CONTROLLED_STOP";
+    }
+    return {
+      ...robot,
+      safety,
+      operationalState:
+        safety === "NORMAL" ? robot.operationalState : "STOPPED",
+      occurredAtUtc: event.occurredAt,
+    };
+  });
+  return { ...snapshot, robots };
+}
+
+function entityKey(operation: OperationsEventPayload): string {
+  return `${operation.entityType}:${operation.entityId}`;
+}
+
+function advanceCursor(
+  snapshot: AuthoritativeSnapshot,
+  eventSequence: number,
+): AuthoritativeSnapshot {
+  return {
+    ...snapshot,
+    cursor: { ...snapshot.cursor, eventSequence },
+    freshness:
+      snapshot.freshness === "RECONCILING" ? "CURRENT" : snapshot.freshness,
+  };
+}
+
 export function coalesceStreamBatch(events: StreamEnvelope[]): {
   coalescedEvents: StreamEnvelope[];
   coalescedCount: number;
 } {
-  const robotLatestIndexMap = new Map<string, number>();
-  const finalIndices = new Set<number>();
+  const latestRobotIndex = new Map<string, number>();
+  const retained = new Set<number>();
   let coalescedCount = 0;
-
-  // Process backwards to find latest state report for each robot
-  for (let i = events.length - 1; i >= 0; i--) {
-    const ev = events[i];
-    if (ev.messageType === "robot.state.report") {
-      const robotId = String((ev.payload as any)?.robotId || "");
-      if (robotId) {
-        if (!robotLatestIndexMap.has(robotId)) {
-          robotLatestIndexMap.set(robotId, i);
-          finalIndices.add(i);
-        } else {
-          coalescedCount++;
-        }
+  for (let index = events.length - 1; index >= 0; index--) {
+    const event = events[index];
+    const payload = event.payload as Record<string, unknown>;
+    if (
+      event.messageType === "operations.event" &&
+      payload.entityType === "ROBOT"
+    ) {
+      const robotId = String(payload.entityId || "");
+      if (robotId && latestRobotIndex.has(robotId)) {
+        coalescedCount++;
       } else {
-        finalIndices.add(i);
+        if (robotId) latestRobotIndex.set(robotId, index);
+        retained.add(index);
       }
     } else {
-      // Non-replaceable events (orders, events, acks) are never dropped
-      finalIndices.add(i);
+      retained.add(index);
     }
   }
-
-  const coalescedEvents = events.filter((_, idx) => finalIndices.has(idx));
-  return { coalescedEvents, coalescedCount };
+  return {
+    coalescedEvents: events.filter((_, index) => retained.has(index)),
+    coalescedCount,
+  };
 }
 
-/**
- * Pure reducer function for MAPF-RL state reconciliation.
- */
+function recordDecision(
+  diagnostics: ReconciliationDiagnostics,
+  result: ApplyResult,
+  processed: number,
+): ReconciliationDiagnostics {
+  return {
+    ...diagnostics,
+    duplicateCount:
+      diagnostics.duplicateCount + (result.decision === "DUPLICATE" ? 1 : 0),
+    staleCount: diagnostics.staleCount + (result.decision === "STALE" ? 1 : 0),
+    conflictCount:
+      diagnostics.conflictCount + (result.decision === "CONFLICT" ? 1 : 0),
+    gapCount: diagnostics.gapCount + (result.decision === "GAP" ? 1 : 0),
+    totalEventsProcessed: diagnostics.totalEventsProcessed + processed,
+    lastReconciledAt: new Date().toISOString(),
+    lastDecision: result.decision,
+    lastConflictReason: result.conflictReason,
+    lastGapDetails: result.gapDetails,
+  };
+}
+
+function stateForSnapshot(
+  snapshot: AuthoritativeSnapshot | null,
+): ConnectionState {
+  if (!snapshot) return "LoadingSnapshot";
+  if (snapshot.freshness === "CURRENT") return "Current";
+  if (snapshot.freshness === "STALE") return "Stale";
+  if (snapshot.freshness === "PARTIAL") return "Partial";
+  if (snapshot.freshness === "RECONCILING") return "Reconciling";
+  return "Disconnected";
+}
+
 export function reconciliationReducer(
   state: ReconciliationState,
   action: ReconciliationAction,
 ): ReconciliationState {
-  switch (action.type) {
-    case "SNAPSHOT_REPLACED": {
-      const newSnapshot = action.snapshot;
-      let currentSeq = newSnapshot.cursor.eventSequence;
-      let workingSnapshot: AuthoritativeSnapshot | null = newSnapshot;
-      let duplicateCount = state.diagnostics.duplicateCount;
-      let staleCount = state.diagnostics.staleCount;
-      let conflictCount = state.diagnostics.conflictCount;
-      let gapCount = state.diagnostics.gapCount;
-      let totalProcessed = state.diagnostics.totalEventsProcessed;
-
-      // If there are buffered events that arrived during snapshot load, replay them
-      if (action.bufferedEvents && action.bufferedEvents.length > 0) {
-        const replayEvents = action.bufferedEvents.filter(
-          (e) => e.eventSequence > currentSeq,
-        );
-
-        for (const ev of replayEvents) {
-          totalProcessed++;
-          const result = applySingleEvent(workingSnapshot, ev, currentSeq);
-          workingSnapshot = result.nextSnapshot;
-          currentSeq = result.nextSequence;
-
-          if (result.decision === "DUPLICATE") duplicateCount++;
-          else if (result.decision === "STALE") staleCount++;
-          else if (result.decision === "CONFLICT") conflictCount++;
-          else if (result.decision === "GAP") {
-            gapCount++;
-            break;
-          }
-        }
-      }
-
-      return {
-        ...state,
-        snapshot: workingSnapshot,
-        connectionState:
-          workingSnapshot?.freshness === "RECONCILING"
-            ? "Reconciling"
-            : workingSnapshot?.freshness === "CURRENT"
-              ? "Current"
-              : state.connectionState,
-        cursor: {
-          streamId: workingSnapshot?.cursor.streamId || state.cursor.streamId,
-          eventSequence: currentSeq,
-        },
-        diagnostics: {
-          ...state.diagnostics,
-          duplicateCount,
-          staleCount,
-          conflictCount,
-          gapCount,
-          totalEventsProcessed: totalProcessed,
-          lastReconciledAt: new Date().toISOString(),
-          lastDecision: "APPLIED",
-        },
-      };
+  if (action.type === "SNAPSHOT_REPLACED") {
+    let snapshot: AuthoritativeSnapshot | null = action.snapshot;
+    let sequence = action.snapshot.cursor.eventSequence;
+    let diagnostics = state.diagnostics;
+    const buffered = [...(action.bufferedEvents || [])]
+      .filter((event) => event.eventSequence > sequence)
+      .sort((left, right) => left.eventSequence - right.eventSequence);
+    for (const event of buffered) {
+      const result = applySingleEvent(snapshot, event, sequence);
+      snapshot = result.nextSnapshot;
+      sequence = result.nextSequence;
+      diagnostics = recordDecision(diagnostics, result, 1);
+      if (result.decision === "GAP" || result.decision === "CONFLICT") break;
     }
+    return {
+      ...state,
+      snapshot,
+      connectionState: stateForSnapshot(snapshot),
+      cursor: {
+        streamId: snapshot?.cursor.streamId || state.cursor.streamId,
+        eventSequence: sequence,
+      },
+      diagnostics: {
+        ...diagnostics,
+        lastReconciledAt: new Date().toISOString(),
+        lastDecision: buffered.length ? diagnostics.lastDecision : "APPLIED",
+        lastConflictReason: undefined,
+        lastGapDetails: undefined,
+      },
+    };
+  }
 
-    case "STREAM_EVENT_RECEIVED": {
-      const event = action.event;
-      const currentSeq = state.cursor.eventSequence;
-      const result = applySingleEvent(state.snapshot, event, currentSeq);
+  if (action.type === "SNAPSHOT_LOAD_FAILED") {
+    return {
+      ...state,
+      snapshot: null,
+      connectionState: "Failed",
+    };
+  }
 
-      let { duplicateCount, staleCount, conflictCount, gapCount } =
-        state.diagnostics;
-
-      if (result.decision === "DUPLICATE") duplicateCount++;
-      else if (result.decision === "STALE") staleCount++;
-      else if (result.decision === "CONFLICT") conflictCount++;
-      else if (result.decision === "GAP") gapCount++;
-
-      const nextConnectionState: ConnectionState =
+  if (action.type === "STREAM_EVENT_RECEIVED") {
+    const result = applySingleEvent(
+      state.snapshot,
+      action.event,
+      state.cursor.eventSequence,
+    );
+    return {
+      ...state,
+      snapshot: result.nextSnapshot,
+      connectionState:
         result.decision === "GAP" || result.decision === "CONFLICT"
           ? "Reconciling"
-          : result.decision === "APPLIED"
-            ? "Current"
-            : state.connectionState;
-
-      return {
-        ...state,
-        snapshot: result.nextSnapshot,
-        connectionState: nextConnectionState,
-        cursor: {
-          streamId:
-            result.nextSnapshot?.cursor.streamId || state.cursor.streamId,
-          eventSequence: result.nextSequence,
-        },
-        diagnostics: {
-          ...state.diagnostics,
-          duplicateCount,
-          staleCount,
-          conflictCount,
-          gapCount,
-          totalEventsProcessed: state.diagnostics.totalEventsProcessed + 1,
-          lastReconciledAt: new Date().toISOString(),
-          lastDecision: result.decision,
-          lastConflictReason: result.conflictReason,
-          lastGapDetails: result.gapDetails,
-        },
-      };
-    }
-
-    case "STREAM_BATCH_RECEIVED": {
-      const rawEvents = [...action.events].sort(
-        (a, b) => a.eventSequence - b.eventSequence,
-      );
-      if (rawEvents.length === 0) return state;
-
-      let workingSnapshot = state.snapshot;
-      let currentSeq = state.cursor.eventSequence;
-      let duplicateCount = state.diagnostics.duplicateCount;
-      let staleCount = state.diagnostics.staleCount;
-      let conflictCount = state.diagnostics.conflictCount;
-      let gapCount = state.diagnostics.gapCount;
-      let coalescedCount = 0;
-      let lastDecision: ReconciliationDecision = "APPLIED";
-      let lastConflictReason: string | undefined;
-      let lastGapDetails: { expected: number; received: number } | undefined;
-
-      // Check initial gap in batch
-      if (rawEvents[0].eventSequence > currentSeq + 1) {
-        return {
-          ...state,
-          connectionState: "Reconciling",
-          snapshot: workingSnapshot
-            ? { ...workingSnapshot, freshness: "RECONCILING" }
-            : null,
-          diagnostics: {
-            ...state.diagnostics,
-            gapCount: state.diagnostics.gapCount + 1,
-            totalEventsProcessed:
-              state.diagnostics.totalEventsProcessed + rawEvents.length,
-            lastDecision: "GAP",
-            lastGapDetails: {
-              expected: currentSeq + 1,
-              received: rawEvents[0].eventSequence,
-            },
-          },
-        };
-      }
-
-      // Filter out stale/duplicate events with eventSequence <= currentSeq
-      const newEvents: StreamEnvelope[] = [];
-      for (const ev of rawEvents) {
-        if (ev.eventSequence <= currentSeq) {
-          duplicateCount++;
-        } else {
-          newEvents.push(ev);
-        }
-      }
-
-      if (newEvents.length === 0) {
-        return {
-          ...state,
-          diagnostics: {
-            ...state.diagnostics,
-            duplicateCount,
-            totalEventsProcessed:
-              state.diagnostics.totalEventsProcessed + rawEvents.length,
-            lastDecision: "DUPLICATE",
-          },
-        };
-      }
-
-      // Check for internal gap in newEvents
-      const contiguousEvents: StreamEnvelope[] = [];
-      let expectedSeq = currentSeq + 1;
-
-      for (const ev of newEvents) {
-        if (ev.eventSequence === expectedSeq) {
-          contiguousEvents.push(ev);
-          expectedSeq++;
-        } else if (ev.eventSequence === expectedSeq - 1) {
-          // Exact same sequence within batch (duplicate in batch)
-          contiguousEvents.push(ev);
-        } else if (ev.eventSequence > expectedSeq) {
-          // Internal gap found
-          gapCount++;
-          lastGapDetails = {
-            expected: expectedSeq,
-            received: ev.eventSequence,
-          };
-          break;
-        }
-      }
-
-      const { coalescedEvents, coalescedCount: batchCoalesced } =
-        coalesceStreamBatch(contiguousEvents);
-      coalescedCount += batchCoalesced;
-
-      // Apply each coalesced event
-      for (const ev of coalescedEvents) {
-        if (ev.messageType === "robot.state.report" && workingSnapshot) {
-          const payload = adaptRobotStateReport(
-            ev.payload as Record<string, unknown>,
-          );
-          const existingIndex = workingSnapshot.robots.findIndex(
-            (r) => r.id === payload.robotId,
-          );
-
-          if (existingIndex >= 0) {
-            const existingRobot = workingSnapshot.robots[existingIndex];
-            if (
-              payload.stateVersion === existingRobot.stateVersion &&
-              !isRobotStateIdentical(existingRobot, payload)
-            ) {
-              conflictCount++;
-              lastConflictReason = `Conflicting robot state for ${payload.robotId} at version ${payload.stateVersion}`;
-              lastDecision = "CONFLICT";
-              continue;
-            }
-          }
-
-          const newRobot: Robot = {
-            id: payload.robotId,
-            stateVersion: payload.stateVersion,
-            simulationTimeMs: payload.simulationTimeMs,
-            occurredAtUtc: ev.occurredAt,
-            pose: payload.pose,
-            operationalState: payload.operationalState,
-            connectivity: payload.connectivity,
-            freshness: "CURRENT",
-            safety: payload.safety,
-            activeController: payload.activeController,
-            currentOrderId: payload.orderId,
-            orderUpdateId: payload.orderUpdateId,
-            sessionEpoch: payload.sessionEpoch,
-            simulatorId: payload.simulatorId,
-            batteryPercent: payload.batteryPercent ?? 100,
-          };
-
-          const updatedRobots = [...workingSnapshot.robots];
-          if (existingIndex >= 0) {
-            updatedRobots[existingIndex] = newRobot;
-          } else {
-            updatedRobots.push(newRobot);
-          }
-
-          workingSnapshot = {
-            ...workingSnapshot,
-            robots: updatedRobots,
-          };
-        } else if (ev.messageType === "operations.event" && workingSnapshot) {
-          const payload = adaptOperationsEvent(
-            ev.payload as Record<string, unknown>,
-          );
-          if (payload.entityType === "ORDER") {
-            const existingIndex = workingSnapshot.orders.findIndex(
-              (o) => o.id === payload.entityId,
-            );
-            if (existingIndex >= 0) {
-              const order = workingSnapshot.orders[existingIndex];
-              const updatedOrder: Order = {
-                ...order,
-                state: payload.state || order.state,
-                orderUpdateId:
-                  payload.orderUpdateId !== undefined
-                    ? payload.orderUpdateId
-                    : order.orderUpdateId + 1,
-                planRevisionId: payload.planRevisionId || order.planRevisionId,
-                assignments: payload.assignments || order.assignments,
-                updatedAtUtc: payload.occurredAt || ev.occurredAt,
-              };
-              const updatedOrders = [...workingSnapshot.orders];
-              updatedOrders[existingIndex] = updatedOrder;
-              workingSnapshot = {
-                ...workingSnapshot,
-                orders: updatedOrders,
-              };
-            }
-          }
-        }
-      }
-
-      const maxContiguousSeq =
-        contiguousEvents.length > 0
-          ? contiguousEvents[contiguousEvents.length - 1].eventSequence
-          : currentSeq;
-
-      if (workingSnapshot) {
-        workingSnapshot = {
-          ...workingSnapshot,
-          cursor: {
-            streamId: workingSnapshot.cursor.streamId,
-            eventSequence: maxContiguousSeq,
-          },
-          freshness:
-            lastDecision === "CONFLICT" || lastGapDetails !== undefined
-              ? "RECONCILING"
-              : "CURRENT",
-        };
-      }
-
-      const nextConnectionState: ConnectionState =
-        lastDecision === "CONFLICT" || lastGapDetails !== undefined
-          ? "Reconciling"
-          : "Current";
-
-      return {
-        ...state,
-        snapshot: workingSnapshot,
-        connectionState: nextConnectionState,
-        cursor: {
-          streamId: workingSnapshot?.cursor.streamId || state.cursor.streamId,
-          eventSequence: maxContiguousSeq,
-        },
-        diagnostics: {
-          ...state.diagnostics,
-          duplicateCount,
-          staleCount,
-          conflictCount,
-          gapCount,
-          coalescedCount: state.diagnostics.coalescedCount + coalescedCount,
-          totalEventsProcessed:
-            state.diagnostics.totalEventsProcessed + rawEvents.length,
-          lastReconciledAt: new Date().toISOString(),
-          lastDecision: lastGapDetails ? "GAP" : lastDecision,
-          lastConflictReason,
-          lastGapDetails,
-        },
-      };
-    }
-
-    case "CONNECTION_STATE_CHANGED":
-      return {
-        ...state,
-        connectionState: action.connectionState,
-      };
-
-    case "TRANSPORT_MODE_CHANGED":
-      return {
-        ...state,
-        transportMode: action.transportMode,
-      };
-
-    case "GAP_RECONCILIATION_REQUESTED":
-      return {
-        ...state,
-        connectionState: "Reconciling",
-        snapshot: state.snapshot
-          ? { ...state.snapshot, freshness: "RECONCILING" }
-          : null,
-        diagnostics: {
-          ...state.diagnostics,
-          gapCount: state.diagnostics.gapCount + 1,
-          lastGapDetails: {
-            expected: action.expected,
-            received: action.received,
-          },
-        },
-      };
-
-    case "RESET_DIAGNOSTICS":
-      return {
-        ...state,
-        diagnostics: INITIAL_DIAGNOSTICS,
-      };
-
-    default:
-      return state;
+          : stateForSnapshot(result.nextSnapshot),
+      cursor: {
+        streamId: result.nextSnapshot?.cursor.streamId || state.cursor.streamId,
+        eventSequence: result.nextSequence,
+      },
+      diagnostics: recordDecision(state.diagnostics, result, 1),
+    };
   }
+
+  if (action.type === "STREAM_BATCH_RECEIVED") {
+    const events = [...action.events].sort(
+      (left, right) => left.eventSequence - right.eventSequence,
+    );
+    if (!events.length) return state;
+    let snapshot = state.snapshot;
+    let sequence = state.cursor.eventSequence;
+    let diagnostics = state.diagnostics;
+    let lastResult: ApplyResult = {
+      nextSnapshot: snapshot,
+      decision: "APPLIED",
+      nextSequence: sequence,
+    };
+    for (const event of events) {
+      lastResult = applySingleEvent(snapshot, event, sequence);
+      snapshot = lastResult.nextSnapshot;
+      sequence = lastResult.nextSequence;
+      diagnostics = recordDecision(diagnostics, lastResult, 1);
+      if (lastResult.decision === "GAP" || lastResult.decision === "CONFLICT")
+        break;
+    }
+    const { coalescedCount } = coalesceStreamBatch(events);
+    return {
+      ...state,
+      snapshot,
+      connectionState:
+        lastResult.decision === "GAP" || lastResult.decision === "CONFLICT"
+          ? "Reconciling"
+          : stateForSnapshot(snapshot),
+      cursor: {
+        streamId: snapshot?.cursor.streamId || state.cursor.streamId,
+        eventSequence: sequence,
+      },
+      diagnostics: {
+        ...diagnostics,
+        coalescedCount: diagnostics.coalescedCount + coalescedCount,
+      },
+    };
+  }
+
+  if (action.type === "CONNECTION_STATE_CHANGED") {
+    return {
+      ...state,
+      connectionState: action.connectionState,
+      snapshot: state.snapshot
+        ? {
+            ...state.snapshot,
+            freshness:
+              action.connectionState === "Disconnected"
+                ? "DISCONNECTED"
+                : action.connectionState === "Reconciling"
+                  ? "RECONCILING"
+                  : state.snapshot.freshness,
+          }
+        : null,
+    };
+  }
+  if (action.type === "TRANSPORT_MODE_CHANGED") {
+    return { ...state, transportMode: action.transportMode };
+  }
+  if (action.type === "GAP_RECONCILIATION_REQUESTED") {
+    return {
+      ...state,
+      connectionState: "Reconciling",
+      snapshot: state.snapshot
+        ? { ...state.snapshot, freshness: "RECONCILING" }
+        : null,
+      diagnostics: {
+        ...state.diagnostics,
+        gapCount: state.diagnostics.gapCount + 1,
+        lastDecision: "GAP",
+        lastGapDetails: {
+          expected: action.expected,
+          received: action.received,
+        },
+      },
+    };
+  }
+  return { ...state, diagnostics: INITIAL_DIAGNOSTICS };
 }

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import {
   useOperations,
@@ -13,8 +13,18 @@ import {
   Zap,
   Gauge,
   Sparkles,
+  ShieldAlert,
+  ShieldCheck,
+  AlertTriangle,
+  Bell,
+  CheckCircle2,
+  X,
 } from "lucide-react";
-import { formatLocaleTime, formatUtcIso } from "../../utils/time/time.ts";
+import {
+  formatLocaleTime,
+  formatUtcIso,
+  formatStateAge,
+} from "../../utils/time/time.ts";
 
 export const BentoStatusRail: React.FC = () => {
   const { t, language } = useAppConfig();
@@ -28,6 +38,28 @@ export const BentoStatusRail: React.FC = () => {
     transportMode,
     connectionState,
   } = useOperations();
+
+  const [showAlarmPopup, setShowAlarmPopup] = useState<boolean>(false);
+  const alarmMenuRef = useRef<HTMLDivElement>(null);
+  const prevAlarmCountRef = useRef<number>(0);
+
+  // Close alarm popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        alarmMenuRef.current &&
+        !alarmMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowAlarmPopup(false);
+      }
+    };
+    if (showAlarmPopup) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showAlarmPopup]);
 
   const robots = useMemo(() => snapshot?.robots || [], [snapshot?.robots]);
 
@@ -65,6 +97,40 @@ export const BentoStatusRail: React.FC = () => {
   const snapshotAt = snapshot?.snapshotAt;
   const eventSequence = snapshot?.cursor?.eventSequence ?? 0;
 
+  const safetyRobots = useMemo(
+    () => robots.filter((r) => r.safety !== "NORMAL" && r.safety !== "WAIT"),
+    [robots],
+  );
+  const disconnectedRobots = useMemo(
+    () => robots.filter((r) => r.connectivity === "DISCONNECTED"),
+    [robots],
+  );
+
+  const isStale = freshness === "STALE";
+  const isPartial = freshness === "PARTIAL";
+  const hasGap = diagnostics.gapCount > 0 && diagnostics.lastDecision === "GAP";
+  const hasConflict =
+    diagnostics.conflictCount > 0 && diagnostics.lastDecision === "CONFLICT";
+
+  const totalAlarmCount =
+    safetyRobots.length +
+    disconnectedRobots.length +
+    (isStale ? 1 : 0) +
+    (hasGap ? 1 : 0) +
+    (hasConflict ? 1 : 0) +
+    (isPartial ? 1 : 0);
+
+  const hasSafetyAlert = safetyRobots.length > 0 || hasConflict || hasGap;
+  const hasWarningAlert = disconnectedRobots.length > 0 || isStale || isPartial;
+
+  // Auto-expand alarm popover when active alarm count transitions from 0 to > 0 or new incident arrives
+  useEffect(() => {
+    if (totalAlarmCount > 0 && prevAlarmCountRef.current === 0) {
+      setShowAlarmPopup(true);
+    }
+    prevAlarmCountRef.current = totalAlarmCount;
+  }, [totalAlarmCount]);
+
   const efficiencyPct =
     totalFleet > 0 ? Math.round((executingCount / totalFleet) * 100) : 0;
   const connectivityPct =
@@ -75,9 +141,9 @@ export const BentoStatusRail: React.FC = () => {
   const scaleOptions: FleetScale[] = [4, 100];
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-2.5 relative z-30">
       {/* Fleet Stress Test & Stream Controls Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white/80 dark:bg-[#1C1C1E]/80 border border-black/[0.05] dark:border-white/[0.08] backdrop-blur-md text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white/80 dark:bg-[#1C1C1E]/80 border border-black/[0.05] dark:border-white/[0.08] backdrop-blur-md text-xs relative z-30">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="w-5 h-5 rounded-md bg-[#0071E3]/10 dark:bg-[#2997FF]/15 flex items-center justify-center text-[#0071E3] dark:text-[#2997FF]">
@@ -124,6 +190,220 @@ export const BentoStatusRail: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Incident / Alarm Popover Button (Left of 4 Standard) */}
+          <div className="relative z-40" ref={alarmMenuRef}>
+            <button
+              onClick={() => setShowAlarmPopup((v) => !v)}
+              className={`px-2.5 py-1 rounded-xl text-[11px] font-medium flex items-center gap-1.5 transition-all cursor-pointer select-none ${
+                hasSafetyAlert
+                  ? "bg-[#FF3B30]/15 text-[#FF3B30] dark:bg-[#FF453A]/20 dark:text-[#FF453A] border border-[#FF3B30]/35 font-bold shadow-xs animate-pulse"
+                  : hasWarningAlert
+                    ? "bg-[#FF9500]/15 text-[#FF9500] dark:bg-[#FF9F0A]/20 dark:text-[#FF9F0A] border border-[#FF9500]/35 font-bold shadow-xs"
+                    : "bg-[#F2F4F6] dark:bg-[#252528] hover:bg-black/10 dark:hover:bg-white/10 text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] border border-black/[0.04] dark:border-white/[0.06]"
+              }`}
+              title={
+                totalAlarmCount > 0
+                  ? language === "ko"
+                    ? `활성 알람 ${totalAlarmCount}건 (클릭하여 상세 보기)`
+                    : `${totalAlarmCount} Active Alarms (Click to view)`
+                  : language === "ko"
+                    ? "시스템 정상 (클릭하여 상태 확인)"
+                    : "Nominal (Click to view)"
+              }
+            >
+              {hasSafetyAlert ? (
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+              ) : hasWarningAlert ? (
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              ) : (
+                <Bell className="w-3.5 h-3.5 shrink-0 text-[#34C759]" />
+              )}
+              <span className="font-bold">
+                {totalAlarmCount > 0
+                  ? language === "ko"
+                    ? `알람 (${totalAlarmCount})`
+                    : `Alarm (${totalAlarmCount})`
+                  : language === "ko"
+                    ? "알람 (0)"
+                    : "Alarm (0)"}
+              </span>
+            </button>
+
+            {/* Alarm Popover Panel (Wider towards the left) */}
+            {showAlarmPopup && (
+              <div className="absolute right-0 top-full mt-2 w-96 sm:w-[480px] md:w-[560px] max-w-[calc(100vw-2rem)] apple-card p-3.5 sm:p-4 shadow-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl z-50 space-y-3 animate-fade-in ring-1 ring-black/10 dark:ring-white/15">
+                {/* Popover Header */}
+                <div className="flex items-center justify-between pb-2.5 border-b border-black/[0.06] dark:border-white/[0.08]">
+                  <div className="flex items-center gap-2">
+                    {hasSafetyAlert ? (
+                      <ShieldAlert className="w-4 h-4 text-[#FF3B30] dark:text-[#FF453A]" />
+                    ) : hasWarningAlert ? (
+                      <AlertTriangle className="w-4 h-4 text-[#FF9500] dark:text-[#FF9F0A]" />
+                    ) : (
+                      <ShieldCheck className="w-4 h-4 text-[#34C759]" />
+                    )}
+                    <span className="text-xs sm:text-sm font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                      {language === "ko"
+                        ? "활성 알람 및 인시던트 현황"
+                        : "Active Alarms & Incidents"}
+                    </span>
+                    {totalAlarmCount > 0 && (
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 text-[#FF3B30] dark:text-[#FF453A] font-bold">
+                        {totalAlarmCount}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/5 dark:bg-white/10 uppercase font-bold text-[#86868B]">
+                      {freshness}
+                    </span>
+                    <button
+                      onClick={() => setShowAlarmPopup(false)}
+                      className="p-1 sm:p-1.5 rounded-lg text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                      aria-label="Close popup"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Popover List */}
+                <div className="space-y-2.5 max-h-80 overflow-y-auto no-scrollbar text-xs">
+                  {totalAlarmCount === 0 ? (
+                    <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-[#34C759]/10 dark:bg-[#30D158]/15 text-[#248A3D] dark:text-[#30D158]">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span className="text-xs font-medium">
+                        {language === "ko"
+                          ? "모든 시스템 정상 — 활성 안전 정지 또는 통신 장애가 없습니다."
+                          : "All systems nominal. No safety incidents or disconnections."}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Safety Alerts (Grid on wider screens) */}
+                      {safetyRobots.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider block">
+                            {language === "ko"
+                              ? "안전 정지 경보"
+                              : "Safety Stops"}{" "}
+                            ({safetyRobots.length})
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {safetyRobots.map((r) => (
+                              <div
+                                key={`safety-${r.id}`}
+                                className="flex items-start gap-2 p-2.5 rounded-xl bg-[#FF3B30]/10 dark:bg-[#FF453A]/15 border border-[#FF3B30]/20 text-[#D70015] dark:text-[#FF453A]"
+                              >
+                                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="font-bold">{r.id}</span>
+                                    <span className="text-[10px] font-mono opacity-85 px-1.5 py-0.2 rounded bg-[#FF3B30]/20">
+                                      {r.safety}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] opacity-80 mt-0.5 truncate">
+                                    {r.operationalState} · 배터리{" "}
+                                    {r.batteryPercent}%
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Disconnected Robots (Grid on wider screens) */}
+                      {disconnectedRobots.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider block">
+                            {language === "ko"
+                              ? "통신 끊김 경보"
+                              : "Disconnected Robots"}{" "}
+                            ({disconnectedRobots.length})
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {disconnectedRobots.map((r) => (
+                              <div
+                                key={`disc-${r.id}`}
+                                className="flex items-start gap-2 p-2.5 rounded-xl bg-[#FF9500]/10 dark:bg-[#FF9F0A]/15 border border-[#FF9500]/20 text-[#C93400] dark:text-[#FF9F0A]"
+                              >
+                                <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="font-bold">{r.id}</span>
+                                    <span className="text-[10px] font-mono opacity-85 px-1.5 py-0.2 rounded bg-[#FF9500]/20">
+                                      OFFLINE
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] opacity-80 mt-0.5 truncate">
+                                    {r.operationalState} ·{" "}
+                                    {language === "ko"
+                                      ? "연결 끊김"
+                                      : "Disconnected"}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Gap Alert */}
+                      {hasGap && (
+                        <div className="p-2.5 rounded-xl bg-[#FF3B30]/10 dark:bg-[#FF453A]/15 border border-[#FF3B30]/20 text-[#D70015] dark:text-[#FF453A] flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold">
+                              {t("incidentGapWarning")}
+                            </span>
+                            <p className="text-[10px] opacity-80">
+                              Expected: #{diagnostics.lastGapDetails?.expected},
+                              Received: #{diagnostics.lastGapDetails?.received}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Conflict Alert */}
+                      {hasConflict && (
+                        <div className="p-2.5 rounded-xl bg-[#FF3B30]/10 dark:bg-[#FF453A]/15 border border-[#FF3B30]/20 text-[#D70015] dark:text-[#FF453A] flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold">
+                              {t("incidentConflictWarning")}
+                            </span>
+                            <p className="text-[10px] opacity-80">
+                              {diagnostics.lastConflictReason}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Stale Warning */}
+                      {isStale && (
+                        <div className="p-2.5 rounded-xl bg-[#FF9500]/10 dark:bg-[#FF9F0A]/15 border border-[#FF9500]/20 text-[#C93400] dark:text-[#FF9F0A] flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold">
+                              {t("incidentStaleWarning")}
+                            </span>
+                            {snapshotAt && (
+                              <p className="text-[10px] opacity-80">
+                                Age: {formatStateAge(snapshotAt)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Scale Selector Pills */}
           <div className="flex items-center gap-1 bg-[#F2F4F6] dark:bg-[#252528] p-0.5 rounded-xl border border-black/[0.04] dark:border-white/[0.06]">
             {scaleOptions.map((s) => (

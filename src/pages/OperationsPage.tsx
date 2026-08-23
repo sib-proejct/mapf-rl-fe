@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAppConfig } from "../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../app/providers/OperationsContext.tsx";
-import { IncidentStrip } from "../components/common/IncidentStrip.tsx";
 import { BentoStatusRail } from "../components/common/BentoStatusRail.tsx";
 import { FastMapCanvas } from "../components/map/FastMapCanvas.tsx";
 import { GraphMapCanvas } from "../components/map/GraphMapCanvas.tsx";
@@ -517,10 +516,7 @@ export const OperationsPage: React.FC = () => {
 
   return (
     <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 space-y-4 sm:space-y-5 animate-fade-in">
-      {/* 1. Incident Alert Strip */}
-      <IncidentStrip />
-
-      {/* 2. Bento Status Rail */}
+      {/* 1. Bento Status Rail with Integrated Scale Simulator & Alarm Popover */}
       <BentoStatusRail />
 
       {/* 3. Side-by-Side Operations Console with Interactive Resizable Layout */}

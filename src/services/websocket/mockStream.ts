@@ -6,6 +6,7 @@ import type { StreamEnvelope } from "../../domain/event/types.ts";
 import type { AuthoritativeSnapshot } from "../../domain/snapshot/types.ts";
 import { advanceStressMotion } from "../../contracts/fixtures/stressFleet.ts";
 import type { MapTopology } from "../../domain/map/types.ts";
+import type { Robot } from "../../domain/robot/types.ts";
 
 export type MockScenario =
   | "nominal_10hz"
@@ -102,201 +103,84 @@ export class MockStreamEngine {
     );
     const events: StreamEnvelope[] = [];
 
-    switch (this.scenario) {
-      case "duplicate_injection": {
-        // Generate nominal event first
+    const emit = (
+      robot: Robot,
+      sequence: number,
+      version: number,
+      data: Record<string, unknown> = {},
+      digest?: string,
+    ) =>
+      robotOperationsEvent(
+        robot,
+        sequence,
+        version,
+        now,
+        this.simTimeMs,
+        data,
+        digest,
+      );
+
+    if (this.scenario === "duplicate_injection") {
+      this.currentSeq++;
+      const robot = nextSnapshot.robots[0];
+      const version =
+        (this.robotVersions.get(robot.id) ?? robot.stateVersion) + 1;
+      this.robotVersions.set(robot.id, version);
+      const event = emit(robot, this.currentSeq, version);
+      events.push(event, { ...event });
+    } else if (this.scenario === "gap_injection") {
+      this.currentSeq += 5;
+      const robot = nextSnapshot.robots[0];
+      const version =
+        (this.robotVersions.get(robot.id) ?? robot.stateVersion) + 5;
+      this.robotVersions.set(robot.id, version);
+      events.push(emit(robot, this.currentSeq, version));
+    } else if (this.scenario === "stale_injection") {
+      const robot = snapshot.robots[0];
+      events.push(
+        emit(robot, Math.max(1, this.currentSeq - 10), 1, {
+          simulationTimeMs: 1000,
+          pose: { xMeters: 0, yMeters: 0, yawRadians: 0 },
+          operationalState: "IDLE",
+        }),
+      );
+    } else if (this.scenario === "conflict_injection") {
+      const robot = snapshot.robots[0];
+      const version = this.robotVersions.get(robot.id) ?? robot.stateVersion;
+      events.push(
+        emit(
+          robot,
+          this.currentSeq,
+          version,
+          {
+            pose: { xMeters: 999, yMeters: 999, yawRadians: 3.14 },
+            operationalState: "STOPPED",
+            connectivity: "DISCONNECTED",
+            safety: "FAULT",
+          },
+          "f".repeat(64),
+        ),
+      );
+    } else if (this.scenario === "slow_consumer_burst") {
+      for (let index = 0; index < 50; index++) {
         this.currentSeq++;
-        const targetRobot = nextSnapshot.robots[0] || snapshot.robots[0];
-        const prevVer =
-          this.robotVersions.get(targetRobot.id) ?? targetRobot.stateVersion;
-        const nextVer = prevVer + 1;
-        this.robotVersions.set(targetRobot.id, nextVer);
-
-        const eventId = `msg-dup-${this.currentSeq}`;
-
-        const baseEvent: StreamEnvelope = {
-          contractVersion: "1.0.0",
-          messageId: eventId,
-          messageType: "robot.state.report",
-          producer: { kind: "SIMULATOR", id: "sim-01" },
-          occurredAt: now,
-          correlationId: `corr-${this.currentSeq}`,
-          eventSequence: this.currentSeq,
-          payload: {
-            robotId: targetRobot.id,
-            stateVersion: nextVer,
-            simulationTimeMs: this.simTimeMs,
-            pose: targetRobot.pose,
-            operationalState: targetRobot.operationalState,
-            connectivity: targetRobot.connectivity,
-            safety: targetRobot.safety,
-            activeController: targetRobot.activeController,
-            batteryPercent: targetRobot.batteryPercent,
-          },
-        };
-
-        // Push nominal event followed by exact duplicate event
-        events.push(baseEvent);
-        events.push({ ...baseEvent });
-        break;
+        const robot = nextSnapshot.robots[index % nextSnapshot.robots.length];
+        const version =
+          (this.robotVersions.get(robot.id) ?? robot.stateVersion) + 1;
+        this.robotVersions.set(robot.id, version);
+        events.push(
+          emit(robot, this.currentSeq, version, {
+            simulationTimeMs: this.simTimeMs + index * 10,
+          }),
+        );
       }
-
-      case "gap_injection": {
-        // Intentionally skip 5 sequence numbers (gap!)
-        this.currentSeq += 5;
-        const targetRobot = nextSnapshot.robots[0] || snapshot.robots[0];
-        const prevVer =
-          this.robotVersions.get(targetRobot.id) ?? targetRobot.stateVersion;
-        const nextVer = prevVer + 5;
-        this.robotVersions.set(targetRobot.id, nextVer);
-
-        events.push({
-          contractVersion: "1.0.0",
-          messageId: `msg-gap-${this.currentSeq}`,
-          messageType: "robot.state.report",
-          producer: { kind: "SIMULATOR", id: "sim-01" },
-          occurredAt: now,
-          correlationId: `corr-gap-${this.currentSeq}`,
-          eventSequence: this.currentSeq,
-          payload: {
-            robotId: targetRobot.id,
-            stateVersion: nextVer,
-            simulationTimeMs: this.simTimeMs + 500,
-            pose: targetRobot.pose,
-            operationalState: targetRobot.operationalState,
-            connectivity: targetRobot.connectivity,
-            safety: targetRobot.safety,
-            activeController: targetRobot.activeController,
-            batteryPercent: targetRobot.batteryPercent,
-          },
-        });
-        break;
-      }
-
-      case "stale_injection": {
-        // Send event with sequence and version from the past
-        const staleSeq = Math.max(1, this.currentSeq - 10);
-        const targetRobot = snapshot.robots[0];
-        events.push({
-          contractVersion: "1.0.0",
-          messageId: `msg-stale-${staleSeq}`,
-          messageType: "robot.state.report",
-          producer: { kind: "SIMULATOR", id: "sim-01" },
-          occurredAt: "2026-08-22T04:00:00.000Z",
-          correlationId: `corr-stale-${staleSeq}`,
-          eventSequence: staleSeq,
-          payload: {
-            robotId: targetRobot ? targetRobot.id : "robot-01",
-            stateVersion: 1, // Older version
-            simulationTimeMs: 1000,
-            pose: { xMeters: 0, yMeters: 0, yawRadians: 0 },
-            operationalState: "IDLE",
-            connectivity: "CONNECTED",
-            safety: "NORMAL",
-            activeController: {
-              mode: "BASELINE",
-              identity: "cardinal-baseline/1.0.0",
-            },
-          },
-        });
-        break;
-      }
-
-      case "conflict_injection": {
-        // Send event with matching sequence/version but conflicting contradictory payload
+    } else {
+      for (const robot of nextSnapshot.robots) {
         this.currentSeq++;
-        const targetRobot = snapshot.robots[0];
-        if (targetRobot) {
-          const currentVer =
-            this.robotVersions.get(targetRobot.id) ?? targetRobot.stateVersion;
-          events.push({
-            contractVersion: "1.0.0",
-            messageId: `msg-conflict-${this.currentSeq}`,
-            messageType: "robot.state.report",
-            producer: { kind: "SIMULATOR", id: "sim-01" },
-            occurredAt: now,
-            correlationId: `corr-conflict-${this.currentSeq}`,
-            eventSequence: this.currentSeq - 1, // Matching current sequence
-            payload: {
-              robotId: targetRobot.id,
-              stateVersion: currentVer, // Matching version
-              simulationTimeMs: targetRobot.simulationTimeMs,
-              pose: { xMeters: 999.0, yMeters: 999.0, yawRadians: 3.14 }, // Conflicting coordinates
-              operationalState: "STOPPED",
-              connectivity: "DISCONNECTED",
-              safety: "FAULT",
-              activeController: targetRobot.activeController,
-            },
-          });
-        }
-        break;
-      }
-
-      case "slow_consumer_burst": {
-        // Emit 50 events in a single tick for coalescing test
-        for (let i = 0; i < 50; i++) {
-          this.currentSeq++;
-          const r = nextSnapshot.robots[i % nextSnapshot.robots.length];
-          const prevVer = this.robotVersions.get(r.id) ?? r.stateVersion;
-          const nextVer = prevVer + 1;
-          this.robotVersions.set(r.id, nextVer);
-
-          events.push({
-            contractVersion: "1.0.0",
-            messageId: `msg-burst-${this.currentSeq}-${i}`,
-            messageType: "robot.state.report",
-            producer: { kind: "SIMULATOR", id: "sim-01" },
-            occurredAt: now,
-            correlationId: `corr-${this.currentSeq}`,
-            eventSequence: this.currentSeq,
-            payload: {
-              robotId: r.id,
-              stateVersion: nextVer,
-              simulationTimeMs: this.simTimeMs + i * 10,
-              pose: r.pose,
-              operationalState: r.operationalState,
-              connectivity: r.connectivity,
-              safety: r.safety,
-              activeController: r.activeController,
-              batteryPercent: r.batteryPercent,
-            },
-          });
-        }
-        break;
-      }
-
-      case "nominal_10hz":
-      default: {
-        // Emit updates for each active robot
-        for (const robot of nextSnapshot.robots) {
-          this.currentSeq++;
-          const prevVer =
-            this.robotVersions.get(robot.id) ?? robot.stateVersion;
-          const nextVer = prevVer + 1;
-          this.robotVersions.set(robot.id, nextVer);
-
-          events.push({
-            contractVersion: "1.0.0",
-            messageId: `msg-${this.currentSeq}`,
-            messageType: "robot.state.report",
-            producer: { kind: "SIMULATOR", id: "sim-01" },
-            occurredAt: now,
-            correlationId: `corr-${this.currentSeq}`,
-            eventSequence: this.currentSeq,
-            payload: {
-              robotId: robot.id,
-              stateVersion: nextVer,
-              simulationTimeMs: this.simTimeMs,
-              pose: robot.pose,
-              operationalState: robot.operationalState,
-              connectivity: robot.connectivity,
-              safety: robot.safety,
-              activeController: robot.activeController,
-              batteryPercent: robot.batteryPercent,
-            },
-          });
-        }
-        break;
+        const version =
+          (this.robotVersions.get(robot.id) ?? robot.stateVersion) + 1;
+        this.robotVersions.set(robot.id, version);
+        events.push(emit(robot, this.currentSeq, version));
       }
     }
 
@@ -314,4 +198,46 @@ export class MockStreamEngine {
   get sequence(): number {
     return this.currentSeq;
   }
+}
+
+function robotOperationsEvent(
+  robot: Robot,
+  sequence: number,
+  entityVersion: number,
+  occurredAt: string,
+  simulationTimeMs: number,
+  overrides: Record<string, unknown>,
+  digest = entityVersion.toString(16).padStart(64, "0").slice(-64),
+): StreamEnvelope {
+  return {
+    contractVersion: "1.0.0",
+    messageId: `msg-${sequence}-${robot.id}`,
+    messageType: "operations.event",
+    producer: { kind: "CORE", id: "core-api" },
+    occurredAt,
+    correlationId: `corr-${sequence}`,
+    eventSequence: sequence,
+    payload: {
+      entityType: "ROBOT",
+      entityId: robot.id,
+      entityVersion,
+      contentDigestSha256: digest,
+      data: {
+        simulationTimeMs,
+        pose: robot.pose,
+        operationalState: robot.operationalState,
+        connectivity: robot.connectivity,
+        freshness: robot.freshness,
+        safety: robot.safety,
+        activeController: robot.activeController,
+        batteryPercent: robot.batteryPercent,
+        orderId: robot.currentOrderId,
+        orderUpdateId: robot.orderUpdateId,
+        sessionEpoch: robot.sessionEpoch,
+        simulatorId: robot.simulatorId,
+        observedAt: occurredAt,
+        ...overrides,
+      },
+    },
+  };
 }

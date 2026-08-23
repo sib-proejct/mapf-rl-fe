@@ -6,8 +6,10 @@ import { BoundedEventBuffer } from "../src/state/reconciliation/boundedBuffer.ts
 import {
   adaptStreamEnvelope,
   adaptRobotStateReport,
+  adaptOperationsEvent,
   EventValidationError,
 } from "../src/contracts/adapters/eventAdapter.ts";
+import { CoreWsClient } from "../src/services/websocket/client.ts";
 import {
   NOMINAL_ROBOT_EVENT_1421,
   NOMINAL_ROBOT_EVENT_1422,
@@ -68,7 +70,7 @@ test("adaptStreamEnvelope: validates contract version and rejects unknown messag
   // Valid envelope
   const valid = adaptStreamEnvelope(NOMINAL_ROBOT_EVENT_1421);
   assert.equal(valid.contractVersion, "1.0.0");
-  assert.equal(valid.messageType, "robot.state.report");
+  assert.equal(valid.messageType, "operations.event");
 
   // Incompatible version
   assert.throws(() => {
@@ -109,4 +111,52 @@ test("adaptRobotStateReport: rejects non-finite pose coordinates", () => {
       pose: { xMeters: Infinity, yMeters: 2.5, yawRadians: 0.0 },
     });
   }, /non-finite value detected/);
+});
+
+test("adaptOperationsEvent: consumes Core data and rejects unsupported entity types", () => {
+  const event = adaptOperationsEvent(NOMINAL_ROBOT_EVENT_1421.payload);
+  assert.equal(event.entityType, "ROBOT");
+  assert.equal(event.entityVersion, 43);
+  assert.equal(event.data.pose.xMeters, 4.6);
+
+  assert.throws(
+    () =>
+      adaptOperationsEvent({
+        ...NOMINAL_ROBOT_EVENT_1421.payload,
+        entityType: "NOT_A_CORE_ENTITY",
+      }),
+    /Unknown operations entityType/,
+  );
+});
+
+test("CoreWsClient: requests reconciliation through onConnected on open", () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const sockets = [];
+  class FakeWebSocket {
+    static OPEN = 1;
+    static CONNECTING = 0;
+
+    constructor() {
+      this.readyState = FakeWebSocket.CONNECTING;
+      sockets.push(this);
+    }
+
+    close() {
+      this.readyState = 3;
+    }
+  }
+  globalThis.WebSocket = FakeWebSocket;
+
+  try {
+    let connected = 0;
+    const client = new CoreWsClient({ onConnected: () => connected++ });
+    client.connect();
+    sockets[0].readyState = FakeWebSocket.OPEN;
+    sockets[0].onopen();
+    assert.equal(connected, 1);
+    assert.equal(client.state, "Reconciling");
+    client.disconnect();
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+  }
 });

@@ -48,6 +48,22 @@ test("reconciliationReducer: SNAPSHOT_REPLACED atomically loads snapshot and rep
   assert.equal(robot01.stateVersion, 44);
 });
 
+test("reconciliationReducer: snapshot load failure clears previously displayed authority", () => {
+  const baseSnapshot = adaptOperationsSnapshot(
+    CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
+  );
+  const loaded = reconciliationReducer(INITIAL_RECONCILIATION_STATE, {
+    type: "SNAPSHOT_REPLACED",
+    snapshot: baseSnapshot,
+  });
+
+  const failed = reconciliationReducer(loaded, {
+    type: "SNAPSHOT_LOAD_FAILED",
+  });
+  assert.equal(failed.snapshot, null);
+  assert.equal(failed.connectionState, "Failed");
+});
+
 test("reconciliationReducer: DUPLICATE event produces zero state change and increments duplicateCount", () => {
   const baseSnapshot = adaptOperationsSnapshot(
     CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
@@ -190,13 +206,64 @@ test("reconciliationReducer: applies order lifecycle transition event", () => {
   );
   assert.ok(order01);
   assert.equal(order01.state, "Completed");
-  assert.equal(order01.orderUpdateId, 1);
+  assert.equal(order01.orderUpdateId, 0);
+  assert.equal(order01.entityVersion, 2);
+});
+
+test("reconciliationReducer: applies Core connectivity and incident entities", () => {
+  const baseSnapshot = adaptOperationsSnapshot(
+    CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
+  );
+  let state = reconciliationReducer(INITIAL_RECONCILIATION_STATE, {
+    type: "SNAPSHOT_REPLACED",
+    snapshot: baseSnapshot,
+  });
+  const envelope = (eventSequence, payload) => ({
+    contractVersion: "1.0.0",
+    messageId: `event-${eventSequence}`,
+    messageType: "operations.event",
+    producer: { kind: "CORE", id: "core-api" },
+    occurredAt: "2026-08-22T04:30:01.000Z",
+    correlationId: `corr-${eventSequence}`,
+    eventSequence,
+    payload,
+  });
+
+  state = reconciliationReducer(state, {
+    type: "STREAM_EVENT_RECEIVED",
+    event: envelope(1421, {
+      entityType: "CONNECTIVITY",
+      entityId: "sim-01",
+      entityVersion: 7,
+      contentDigestSha256: "e".repeat(64),
+      data: { state: "Degraded", sessionEpoch: 5 },
+    }),
+  });
+  assert.equal(state.snapshot.robots[0].connectivity, "DISCONNECTED");
+  assert.equal(state.snapshot.robots[0].freshness, "STALE");
+  assert.equal(state.snapshot.robots[0].sessionEpoch, 5);
+
+  state = reconciliationReducer(state, {
+    type: "STREAM_EVENT_RECEIVED",
+    event: envelope(1422, {
+      entityType: "INCIDENT",
+      entityId: "incident-1",
+      entityVersion: 1,
+      contentDigestSha256: "f".repeat(64),
+      data: { robotId: "robot-01", code: "COLLISION_SAFETY_STOP" },
+    }),
+  });
+  const robot01 = state.snapshot.robots.find(
+    (robot) => robot.id === "robot-01",
+  );
+  assert.equal(robot01.safety, "CONTROLLED_STOP");
+  assert.equal(robot01.operationalState, "STOPPED");
 });
 
 test("coalesceStreamBatch: collapses multiple state reports for the same robot", () => {
   const batch = [
-    NOMINAL_ROBOT_EVENT_1421, // robot-01 version 43
-    NOMINAL_ROBOT_EVENT_1422, // robot-01 version 44 (latest)
+    NOMINAL_ROBOT_EVENT_1421, // Core ROBOT entity version 43
+    NOMINAL_ROBOT_EVENT_1422, // Core ROBOT entity version 44 (latest)
     ORDER_LIFECYCLE_EVENT_1421, // non-replaceable order event
   ];
 

@@ -124,7 +124,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
 
   // Fleet settings
-  const [fleetScale, setFleetScale] = useState<FleetScale>(4);
+  const [fleetScale, setFleetScaleState] = useState<FleetScale>(4);
   const [isSimulatingMotion, setIsSimulatingMotion] = useState<boolean>(true);
 
   // Transports & simulation modes
@@ -186,6 +186,10 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       let snapshotData: AuthoritativeSnapshot;
 
       if (transportMode === "FIXTURE_STREAM") {
+        eventBatchQueueRef.current = [];
+        boundedBufferRef.current.clear();
+        resetRobotMotionCache();
+
         if (fixtureMode === "error") {
           const prob = normalizeProblem(CANONICAL_PROBLEM_FIXTURE);
           setError(prob);
@@ -229,10 +233,14 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         snapshotData = adaptOperationsSnapshot(raw);
       }
 
+      eventBatchQueueRef.current = [];
       // Atomically replace snapshot in state and replay buffered events
-      const buffered = boundedBufferRef.current.getEventsAfter(
-        snapshotData.cursor.eventSequence,
-      );
+      const buffered =
+        transportMode === "FIXTURE_STREAM"
+          ? []
+          : boundedBufferRef.current.getEventsAfter(
+              snapshotData.cursor.eventSequence,
+            );
       boundedBufferRef.current.trimBefore(snapshotData.cursor.eventSequence);
 
       dispatch({
@@ -243,6 +251,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
       setLastFetchedAt(new Date());
     } catch (err: unknown) {
+      dispatch({ type: "SNAPSHOT_LOAD_FAILED" });
       if (err instanceof ProblemError) {
         setError(err.problem);
       } else {
@@ -328,6 +337,9 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     const ws = new CoreWsClient({
+      onConnected: () => {
+        loadSnapshot();
+      },
       onMessage: (envelope) => {
         boundedBufferRef.current.push(envelope);
         handleInboundEvent(envelope);
@@ -347,7 +359,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       ws.disconnect();
       wsClientRef.current = null;
     };
-  }, [transportMode, handleInboundEvent]);
+  }, [transportMode, handleInboundEvent, loadSnapshot]);
 
   // Setup 5s Polling Fallback for POLLING_FALLBACK mode
   useEffect(() => {
@@ -366,6 +378,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         setLastFetchedAt(new Date());
       },
       onError: (err) => {
+        dispatch({ type: "SNAPSHOT_LOAD_FAILED" });
         setError(normalizeProblem(err));
       },
     });
@@ -424,12 +437,26 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
     dispatch({ type: "TRANSPORT_MODE_CHANGED", transportMode: mode });
   }, []);
 
+  const setFleetScale = useCallback((scale: FleetScale) => {
+    eventBatchQueueRef.current = [];
+    boundedBufferRef.current.clear();
+    resetRobotMotionCache();
+    mockEngineRef.current.stop();
+    setFleetScaleState(scale);
+  }, []);
+
   const setMockScenario = useCallback((scen: MockScenario) => {
+    eventBatchQueueRef.current = [];
+    boundedBufferRef.current.clear();
     setMockScenarioState(scen);
     mockEngineRef.current.setScenario(scen);
   }, []);
 
   const setFixtureMode = useCallback((mode: FixtureMode) => {
+    eventBatchQueueRef.current = [];
+    boundedBufferRef.current.clear();
+    resetRobotMotionCache();
+    mockEngineRef.current.stop();
     setFixtureModeState(mode);
     if (mode === "error") {
       setError(normalizeProblem(CANONICAL_PROBLEM_FIXTURE));

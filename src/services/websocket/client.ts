@@ -12,29 +12,26 @@ import { ExponentialBackoff } from "./backoff.ts";
 export interface CoreWsClientOptions {
   url?: string;
   subprotocol?: string;
-  heartbeatTimeoutMs?: number;
   onMessage?: (event: StreamEnvelope) => void;
+  onConnected?: () => void;
   onStateChange?: (state: ConnectionState) => void;
   onError?: (err: Error) => void;
-  onReplayNeeded?: (cursorSequence: number) => void;
 }
 
 export class CoreWsClient {
   private readonly url: string;
   private readonly subprotocol: string;
-  private readonly heartbeatTimeoutMs: number;
   private readonly backoff: ExponentialBackoff;
 
   private socket: WebSocket | null = null;
   private connectionState: ConnectionState = "Disconnected";
   private reconnectTimer: any = null;
-  private heartbeatTimer: any = null;
   private isManuallyClosed: boolean = false;
 
   private readonly onMessageCallback?: (event: StreamEnvelope) => void;
+  private readonly onConnectedCallback?: () => void;
   private readonly onStateChangeCallback?: (state: ConnectionState) => void;
   private readonly onErrorCallback?: (err: Error) => void;
-  private readonly onReplayNeededCallback?: (cursorSequence: number) => void;
 
   constructor(options: CoreWsClientOptions = {}) {
     const defaultWsUrl =
@@ -44,16 +41,15 @@ export class CoreWsClient {
 
     this.url = options.url || defaultWsUrl;
     this.subprotocol = options.subprotocol || "mapf.v1";
-    this.heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? 15000;
     this.backoff = new ExponentialBackoff({
       baseDelayMs: 250,
       maxDelayMs: 30000,
     });
 
     this.onMessageCallback = options.onMessage;
+    this.onConnectedCallback = options.onConnected;
     this.onStateChangeCallback = options.onStateChange;
     this.onErrorCallback = options.onError;
-    this.onReplayNeededCallback = options.onReplayNeeded;
   }
 
   private setState(newState: ConnectionState): void {
@@ -84,12 +80,11 @@ export class CoreWsClient {
 
       this.socket.onopen = () => {
         this.backoff.reset();
-        this.resetHeartbeat();
         this.setState("Reconciling");
+        this.onConnectedCallback?.();
       };
 
       this.socket.onmessage = (event: MessageEvent) => {
-        this.resetHeartbeat();
         try {
           const envelope = adaptStreamEnvelope(event.data);
           this.onMessageCallback?.(envelope);
@@ -139,37 +134,12 @@ export class CoreWsClient {
   }
 
   /**
-   * Resets the heartbeat watchdog timer.
-   */
-  private resetHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      clearTimeout(this.heartbeatTimer);
-    }
-
-    this.heartbeatTimer = setTimeout(() => {
-      // Heartbeat timeout - connection might be half-open / stale
-      this.setState("Stale");
-      if (this.socket) {
-        try {
-          this.socket.close(4000, "Heartbeat timeout");
-        } catch {
-          // Ignore close error
-        }
-      }
-    }, this.heartbeatTimeoutMs);
-  }
-
-  /**
    * Clears active timers.
    */
   private clearTimers(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
-    }
-    if (this.heartbeatTimer) {
-      clearTimeout(this.heartbeatTimer);
-      this.heartbeatTimer = null;
     }
   }
 

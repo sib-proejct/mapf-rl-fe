@@ -29,28 +29,33 @@ test("stream performance: coalesces 10,000 high-frequency robot telemetry events
       batchEvents.push({
         contractVersion: "1.0.0",
         messageId: `msg-perf-${seq}`,
-        messageType: "robot.state.report",
-        producer: { kind: "SIMULATOR", id: "sim-01" },
+        messageType: "operations.event",
+        producer: { kind: "CORE", id: "core-api" },
         occurredAt: new Date().toISOString(),
         correlationId: `corr-${seq}`,
         eventSequence: seq,
         payload: {
-          robotId: `robot-${String(r + 1).padStart(2, "0")}`,
-          stateVersion: 100 + t,
-          simulationTimeMs: 12400 + t * 50,
-          pose: {
-            xMeters: 4.5 + t * 0.01,
-            yMeters: 2.5 + t * 0.01,
-            yawRadians: 0,
+          entityType: "ROBOT",
+          entityId: `robot-${String(r + 1).padStart(2, "0")}`,
+          entityVersion: 100 + t,
+          contentDigestSha256: seq.toString(16).padStart(64, "0"),
+          data: {
+            stateVersion: 100 + t,
+            simulationTimeMs: 12400 + t * 50,
+            pose: {
+              xMeters: 4.5 + t * 0.01,
+              yMeters: 2.5 + t * 0.01,
+              yawRadians: 0,
+            },
+            operationalState: "EXECUTING",
+            connectivity: "CONNECTED",
+            safety: "NORMAL",
+            activeController: {
+              mode: "BASELINE",
+              identity: "cardinal-baseline/1.0.0",
+            },
+            batteryPercent: 90,
           },
-          operationalState: "EXECUTING",
-          connectivity: "CONNECTED",
-          safety: "NORMAL",
-          activeController: {
-            mode: "BASELINE",
-            identity: "cardinal-baseline/1.0.0",
-          },
-          batteryPercent: 90,
         },
       });
     }
