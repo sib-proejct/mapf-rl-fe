@@ -1,10 +1,10 @@
 # MAPF-RL FE
 
-model-based Reinforcement Learning을 AGV, AMR 로봇의 path finding에 적용하는 repository입니다.
-중앙 서버에서 제어하는 것보다 분산형으로 각각의 에이전트로서 MAPF를 풀어보고자 합니다.
-현재, 산업용 로봇의 스펙 향상으로 충분히 가능하며, 강화학습의 결과인 policy는 단순 분포함수 이기 때문에 로봇 내부에서 큰 연산이 필요 없습니다.
-어떻게 강화학습 환경을 구축해서 state, action의 space를 줄이고, transition probabilty를 어떤 함수로 계산할 것인지에 대한 아이디어는 비공개 입니다.
-현재 아이디어 단계에 있고, 실증은 하지 못했습니다.
+model-based Reinforcement Learning을 AGV, AMR 로봇의 path finding에 적용하는 repository입니다.  
+중앙 서버에서 제어하는 것보다 분산형으로 각각의 에이전트로서 MAPF를 풀어보고자 합니다.  
+현재, 산업용 로봇의 스펙 향상으로 충분히 가능하며, 강화학습의 결과인 policy는 단순 분포함수 이기 때문에 로봇 내부에서 큰 연산이 필요 없습니다.  
+어떻게 강화학습 환경을 구축해서 state, action의 space를 줄이고, transition probabilty를 어떤 함수로 계산할 것인지에 대한 아이디어는 비공개 입니다.  
+현재 아이디어 단계에 있고, 실증은 하지 못했습니다.  
 궁금하신 분은 jhpark@alumni.kaist.ac.kr로 연락 주시면 감사하겠습니다.
 
 ## 웹 화면
