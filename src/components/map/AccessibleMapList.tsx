@@ -1,3 +1,4 @@
+import { NodeMoveConfirmation } from "./NodeMoveConfirmation.tsx";
 import React, { useState, useMemo } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
@@ -134,6 +135,7 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
     setSelectedRobotId,
     selectedNodeId,
     setSelectedNodeId,
+    clickNode,
     topology,
   } = useOperations();
 
@@ -964,7 +966,7 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedNodeId(node.id);
+                            void clickNode(node.id);
                           }}
                           className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                             isSelected
@@ -974,6 +976,14 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                         >
                           {isSelected ? "Inspecting" : "Inspect"}
                         </button>
+                        {isSelected && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="whitespace-normal text-left mt-2"
+                          >
+                            <NodeMoveConfirmation nodeId={node.id} />
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

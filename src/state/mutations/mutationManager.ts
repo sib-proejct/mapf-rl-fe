@@ -198,11 +198,17 @@ export class MutationManager {
         const matched = snapshot.orders.find((o) => {
           if (!payload.assignments?.length || !o.assignments?.length)
             return false;
+          if (o.requestId) return o.requestId === mut.requestId;
+          if (
+            payload.assignments.some((assignment) => assignment.arrivalAction)
+          )
+            return false;
           const firstAssign = payload.assignments[0];
           return o.assignments.some(
             (a) =>
               a.goalColumn === firstAssign.goalColumn &&
               a.goalRow === firstAssign.goalRow &&
+              a.arrivalAction === firstAssign.arrivalAction &&
               (!firstAssign.robotId || a.robotId === firstAssign.robotId),
           );
         });

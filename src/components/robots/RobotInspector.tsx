@@ -570,6 +570,20 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
         </div>
       </div>
 
+      {selectedRobot.stationState && (
+        <div className="p-3 rounded-xl bg-[#F5F5F7] dark:bg-[#252528] text-xs space-y-1 text-[#1D1D1F] dark:text-[#F5F5F7]">
+          <p>
+            {selectedRobot.stationState.loaded ? "적재됨" : "빈 로봇"} ·{" "}
+            {selectedRobot.stationState.batteryPercent.toFixed(1)}%
+          </p>
+          {selectedRobot.stationState.action && (
+            <p>
+              {selectedRobot.stationState.action} ·{" "}
+              {selectedRobot.stationState.phase}
+            </p>
+          )}
+        </div>
+      )}
       {/* 3. Pose & Coordinates Grid */}
       <div className="grid grid-cols-2 gap-2.5 text-xs">
         <div className="bg-[#F5F5F7] dark:bg-[#252528] p-3 rounded-2xl border border-black/[0.02] dark:border-white/[0.04]">

@@ -16,7 +16,13 @@ export const OperationsSidebar: React.FC<OperationsSidebarProps> = ({
   className = "",
 }) => {
   const { t } = useAppConfig();
-  const { snapshot, selectedRobotId, selectedNodeId } = useOperations();
+  const {
+    snapshot,
+    selectedRobotId,
+    selectedNodeId,
+    isOrderModalOpen,
+    nodeCommand,
+  } = useOperations();
 
   const [activeTab, setActiveTab] = useState<SidebarTab>("fleet");
 
@@ -25,10 +31,22 @@ export const OperationsSidebar: React.FC<OperationsSidebarProps> = ({
 
   // If robot or node is selected, ensure we are on the fleet tab where inline inspector lives
   useEffect(() => {
-    if (selectedRobotId || selectedNodeId !== null) {
+    if (
+      !isOrderModalOpen &&
+      !nodeCommand &&
+      (selectedRobotId || selectedNodeId !== null)
+    ) {
       setActiveTab("fleet");
     }
   }, [selectedRobotId, selectedNodeId]);
+
+  useEffect(() => {
+    if (isOrderModalOpen) setActiveTab("orders");
+  }, [isOrderModalOpen]);
+
+  useEffect(() => {
+    if (nodeCommand) setActiveTab("orders");
+  }, [nodeCommand]);
 
   return (
     <div
@@ -39,6 +57,7 @@ export const OperationsSidebar: React.FC<OperationsSidebarProps> = ({
         <div className="grid grid-cols-2 bg-[#F2F4F6] dark:bg-[#252528] p-1 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] text-xs gap-1">
           {/* Tab 1: Fleet Robots & Inspector */}
           <button
+            disabled={isOrderModalOpen}
             onClick={() => setActiveTab("fleet")}
             className={`py-2 px-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer select-none flex items-center justify-center gap-1.5 ${
               activeTab === "fleet"

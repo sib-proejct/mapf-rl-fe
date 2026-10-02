@@ -37,11 +37,12 @@ export const BentoStatusRail: React.FC = () => {
     diagnostics,
     transportMode,
     connectionState,
+    setIsIncidentCenterOpen,
+    setSelectedIncidentId,
   } = useOperations();
 
   const [showAlarmPopup, setShowAlarmPopup] = useState<boolean>(false);
   const alarmMenuRef = useRef<HTMLDivElement>(null);
-  const prevAlarmCountRef = useRef<number>(0);
 
   // Close alarm popover when clicking outside
   useEffect(() => {
@@ -106,6 +107,11 @@ export const BentoStatusRail: React.FC = () => {
     [robots],
   );
 
+  const activeIncidents = (snapshot?.incidents || []).filter(
+    (incident) => incident.status === "ACTIVE",
+  );
+  const isReconciling =
+    freshness === "RECONCILING" || connectionState === "Reconciling";
   const isStale = freshness === "STALE";
   const isPartial = freshness === "PARTIAL";
   const hasGap = diagnostics.gapCount > 0 && diagnostics.lastDecision === "GAP";
@@ -113,6 +119,8 @@ export const BentoStatusRail: React.FC = () => {
     diagnostics.conflictCount > 0 && diagnostics.lastDecision === "CONFLICT";
 
   const totalAlarmCount =
+    activeIncidents.length +
+    (isReconciling ? 1 : 0) +
     safetyRobots.length +
     disconnectedRobots.length +
     (isStale ? 1 : 0) +
@@ -120,16 +128,13 @@ export const BentoStatusRail: React.FC = () => {
     (hasConflict ? 1 : 0) +
     (isPartial ? 1 : 0);
 
-  const hasSafetyAlert = safetyRobots.length > 0 || hasConflict || hasGap;
-  const hasWarningAlert = disconnectedRobots.length > 0 || isStale || isPartial;
-
-  // Auto-expand alarm popover when active alarm count transitions from 0 to > 0 or new incident arrives
-  useEffect(() => {
-    if (totalAlarmCount > 0 && prevAlarmCountRef.current === 0) {
-      setShowAlarmPopup(true);
-    }
-    prevAlarmCountRef.current = totalAlarmCount;
-  }, [totalAlarmCount]);
+  const hasSafetyAlert =
+    activeIncidents.length > 0 ||
+    safetyRobots.length > 0 ||
+    hasConflict ||
+    hasGap;
+  const hasWarningAlert =
+    disconnectedRobots.length > 0 || isStale || isPartial || isReconciling;
 
   const efficiencyPct =
     totalFleet > 0 ? Math.round((executingCount / totalFleet) * 100) : 0;
@@ -193,6 +198,8 @@ export const BentoStatusRail: React.FC = () => {
           {/* Incident / Alarm Popover Button (Left of 4 Standard) */}
           <div className="relative z-40" ref={alarmMenuRef}>
             <button
+              aria-expanded={showAlarmPopup}
+              aria-controls="operations-alarm-panel"
               onClick={() => setShowAlarmPopup((v) => !v)}
               className={`px-2.5 py-1 rounded-xl text-[11px] font-medium flex items-center gap-1.5 transition-all cursor-pointer select-none ${
                 hasSafetyAlert
@@ -231,7 +238,10 @@ export const BentoStatusRail: React.FC = () => {
 
             {/* Alarm Popover Panel (Wider towards the left) */}
             {showAlarmPopup && (
-              <div className="absolute right-0 top-full mt-2 w-96 sm:w-[480px] md:w-[560px] max-w-[calc(100vw-2rem)] apple-card p-3.5 sm:p-4 shadow-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl z-50 space-y-3 animate-fade-in ring-1 ring-black/10 dark:ring-white/15">
+              <div
+                id="operations-alarm-panel"
+                className="absolute right-0 top-full mt-2 w-96 sm:w-[480px] md:w-[560px] max-w-[calc(100vw-2rem)] apple-card p-3.5 sm:p-4 shadow-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl z-50 space-y-3 animate-fade-in ring-1 ring-black/10 dark:ring-white/15"
+              >
                 {/* Popover Header */}
                 <div className="flex items-center justify-between pb-2.5 border-b border-black/[0.06] dark:border-white/[0.08]">
                   <div className="flex items-center gap-2">
@@ -267,6 +277,17 @@ export const BentoStatusRail: React.FC = () => {
                   </div>
                 </div>
 
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAlarmPopup(false);
+                    setIsIncidentCenterOpen(true);
+                  }}
+                  className="text-xs font-semibold text-[#0071E3] dark:text-[#2997FF] hover:underline"
+                >
+                  {t("incidentCenterTitle")} →
+                </button>
+
                 {/* Popover List */}
                 <div className="space-y-2.5 max-h-80 overflow-y-auto no-scrollbar text-xs">
                   {totalAlarmCount === 0 ? (
@@ -280,6 +301,33 @@ export const BentoStatusRail: React.FC = () => {
                     </div>
                   ) : (
                     <>
+                      {activeIncidents.map((incident) => (
+                        <button
+                          key={incident.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedIncidentId(incident.id);
+                            setShowAlarmPopup(false);
+                            setIsIncidentCenterOpen(true);
+                          }}
+                          className="w-full text-left p-2.5 rounded-xl border border-[#FF9500]/20 bg-[#FF9500]/10 space-y-1"
+                        >
+                          <span className="block font-bold">
+                            {incident.severity} · {incident.reasonCode}
+                          </span>
+                          <span className="block text-[#86868B]">
+                            {incident.description}
+                          </span>
+                        </button>
+                      ))}
+                      {(isPartial || isReconciling) && (
+                        <div className="p-2.5 rounded-xl bg-[#0071E3]/10 text-[#0071E3] dark:text-[#2997FF]">
+                          {isReconciling
+                            ? t("connReconciling")
+                            : t("incidentPartialWarning")}
+                        </div>
+                      )}
+
                       {/* Safety Alerts (Grid on wider screens) */}
                       {safetyRobots.length > 0 && (
                         <div className="space-y-1.5">

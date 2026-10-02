@@ -86,7 +86,7 @@ export const IncidentStrip: React.FC = () => {
   return (
     <div
       role="alert"
-      className="fixed top-16 sm:top-18 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-1.5rem)] sm:w-[calc(100%-3rem)] max-w-[1920px] pointer-events-none transition-all duration-300 ease-out animate-fade-in"
+      className="relative w-full transition-all duration-300 ease-out animate-fade-in"
     >
       <div className="pointer-events-auto bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-[#FF9500]/30 dark:border-[#FF9F0A]/35 shadow-2xl rounded-2xl p-2 sm:px-3.5 sm:py-2 flex items-center justify-between gap-2.5 text-[#C93400] dark:text-[#FF9F0A] text-xs ring-1 ring-black/5 dark:ring-white/10 overflow-hidden">
         {/* Left: Clickable Alert Strip that opens Incident Center */}

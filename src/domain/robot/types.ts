@@ -51,4 +51,6 @@ export interface Robot {
   sessionEpoch?: number;
   simulatorId?: string;
   batteryPercent?: number;
+  stationActionsVersion?: string;
+  stationState?: import("../../contracts/adapters/stationAdapter.ts").StationState;
 }

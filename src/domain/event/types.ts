@@ -72,6 +72,8 @@ export interface RobotStateReportPayload {
   safety: SafetyState;
   activeController: ActiveController;
   batteryPercent?: number;
+  stationActionsVersion?: string;
+  stationState?: import("../../contracts/adapters/stationAdapter.ts").StationState;
   orderId?: string;
   orderUpdateId?: number;
   sessionEpoch?: number;

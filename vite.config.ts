@@ -7,11 +7,17 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: process.env.VITE_MAPF_CORE_BASE_URL || "http://127.0.0.1:8000",
+        target:
+          process.env.MAPF_CORE_PROXY_TARGET ||
+          process.env.VITE_MAPF_CORE_BASE_URL ||
+          "http://127.0.0.1:8000",
         changeOrigin: true,
       },
       "/ws": {
-        target: process.env.VITE_MAPF_CORE_BASE_URL || "http://127.0.0.1:8000",
+        target:
+          process.env.MAPF_CORE_PROXY_TARGET ||
+          process.env.VITE_MAPF_CORE_BASE_URL ||
+          "http://127.0.0.1:8000",
         ws: true,
         changeOrigin: true,
       },

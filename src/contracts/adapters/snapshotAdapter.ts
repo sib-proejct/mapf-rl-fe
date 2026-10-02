@@ -1,3 +1,4 @@
+import { adaptArrivalAction, adaptStationState } from "./stationAdapter.ts";
 import type {
   AuthoritativeSnapshot,
   SnapshotFreshness,
@@ -66,7 +67,7 @@ export function adaptOperationsSnapshot(
 
   const obj = raw as Record<string, unknown>;
 
-  if (obj.contractVersion !== "1.0.0") {
+  if (!["1.0.0", "1.1.0"].includes(String(obj.contractVersion))) {
     throw new Error(
       `Incompatible contractVersion: expected "1.0.0", got "${obj.contractVersion}"`,
     );
@@ -243,10 +244,16 @@ export function adaptOperationsSnapshot(
           typeof payload.simulatorId === "string"
             ? payload.simulatorId
             : undefined,
+        stationActionsVersion:
+          typeof payload.stationActionsVersion === "string"
+            ? payload.stationActionsVersion
+            : undefined,
+        stationState: adaptStationState(payload.stationState),
         batteryPercent:
-          typeof payload.batteryPercent === "number"
+          adaptStationState(payload.stationState)?.batteryPercent ??
+          (typeof payload.batteryPercent === "number"
             ? payload.batteryPercent
-            : 100,
+            : 100),
       });
     } else if (entityType === "ORDER") {
       const state: OrderLifecycleState = (
@@ -275,6 +282,7 @@ export function adaptOperationsSnapshot(
         robotId: String(a.robotId || ""),
         goalColumn: Number(a.goalColumn) || 0,
         goalRow: Number(a.goalRow) || 0,
+        arrivalAction: adaptArrivalAction(a.arrivalAction),
       }));
 
       const orderUpdateId =
@@ -354,6 +362,8 @@ export function adaptOperationsSnapshot(
             ? payload.planRevisionId
             : undefined,
         state,
+        requestId:
+          typeof payload.requestId === "string" ? payload.requestId : undefined,
         assignments,
         mapId:
           typeof payload.mapId === "string"
@@ -367,8 +377,12 @@ export function adaptOperationsSnapshot(
             : typeof (payload.map as any)?.revision === "number"
               ? (payload.map as any).revision
               : undefined,
-        submittedAtUtc,
-        updatedAtUtc,
+        submittedAtUtc:
+          typeof payload.submittedAt === "string"
+            ? payload.submittedAt
+            : undefined,
+        updatedAtUtc:
+          typeof payload.updatedAt === "string" ? payload.updatedAt : undefined,
         timeline,
       });
     } else if (entityType === "INCIDENT") {

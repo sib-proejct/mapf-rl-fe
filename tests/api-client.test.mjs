@@ -78,8 +78,8 @@ test("unsupported live mutations are rejected locally without a request", async 
 
   const client = new CoreApiClient("", () => "csrf-token");
   await assert.rejects(
-    client.cancelOrder(
-      { orderId: "order-01", orderUpdateId: 1 },
+    client.sendInstantAction(
+      { robotId: "robot-01", action: "PAUSE" },
       { requestId: REQUEST_ID },
     ),
     (error) =>

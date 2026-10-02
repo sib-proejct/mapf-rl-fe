@@ -31,7 +31,6 @@ import {
 } from "lucide-react";
 import { OrderList } from "../components/orders/OrderList.tsx";
 import { OrderInspector } from "../components/orders/OrderInspector.tsx";
-import { OrderCreateModal } from "../components/orders/OrderCreateModal.tsx";
 import { OrderActionDialog } from "../components/orders/OrderActionDialog.tsx";
 import { IncidentCenter } from "../components/incidents/IncidentCenter.tsx";
 import { formatStateAge } from "../utils/time/time.ts";
@@ -157,7 +156,6 @@ export const OrdersPage: React.FC = () => {
       </div>
 
       {/* Phase 3 Modals */}
-      <OrderCreateModal />
       <OrderActionDialog />
     </div>
   );

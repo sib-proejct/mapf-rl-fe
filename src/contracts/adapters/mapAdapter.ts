@@ -89,7 +89,48 @@ export function adaptRasterMap(raw: unknown): RasterMap {
     }
   }
 
+  let stationCatalog: RasterMap["stationCatalog"];
+  if (obj.stationCatalog !== undefined) {
+    if (
+      !Array.isArray(obj.stationCatalog) ||
+      typeof obj.stationCatalogDigestSha256 !== "string" ||
+      !/^[0-9a-f]{64}$/.test(obj.stationCatalogDigestSha256)
+    )
+      throw new Error("Invalid station catalog");
+    const ids = new Set<number>();
+    stationCatalog = obj.stationCatalog.map((raw) => {
+      if (!raw || typeof raw !== "object") throw new Error("Invalid station");
+      const station = raw as Record<string, unknown>;
+      const column = Number(station.column),
+        row = Number(station.row);
+      const id = row * widthCells + column;
+      if (
+        !Number.isInteger(column) ||
+        !Number.isInteger(row) ||
+        column < 0 ||
+        row < 0 ||
+        column >= widthCells ||
+        row >= heightCells ||
+        cells[id] !== 0 ||
+        ids.has(id) ||
+        !["pick", "place", "charger"].includes(String(station.type)) ||
+        typeof station.name !== "string"
+      )
+        throw new Error("Invalid station fields");
+      ids.add(id);
+      return {
+        column,
+        row,
+        type: station.type as "pick" | "place" | "charger",
+        name: station.name,
+      };
+    });
+  }
   return {
+    stationCatalog,
+    stationCatalogDigestSha256: obj.stationCatalogDigestSha256 as
+      | string
+      | undefined,
     contractVersion: "1.0.0",
     mapId: obj.mapId,
     revision: obj.revision,

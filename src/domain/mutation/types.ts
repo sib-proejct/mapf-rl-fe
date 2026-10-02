@@ -23,6 +23,7 @@ export interface CreateOrderAssignmentInput {
   robotId: string;
   goalColumn: number;
   goalRow: number;
+  arrivalAction?: import("../../contracts/generated.ts").StationAction;
 }
 
 export interface CreateOrderRequest {
@@ -34,11 +35,10 @@ export interface CreateOrderRequest {
 
 export type CreateOrderInput = Omit<CreateOrderRequest, "requestId">;
 
-export interface CancelOrderRequest {
-  orderId: string;
-  orderUpdateId: number;
-  reason?: string;
-}
+export type CancelOrderRequest = Omit<
+  import("../../contracts/generated.ts").CancelOrderCommand,
+  "requestId"
+> & { orderId: string };
 
 export interface ReassignOrderRequest {
   orderId: string;

@@ -31,6 +31,7 @@ import {
   adaptOperationsEvent,
   adaptRobotStateReport,
 } from "../../contracts/adapters/eventAdapter.ts";
+import { adaptArrivalAction } from "../../contracts/adapters/stationAdapter.ts";
 import { adaptRasterMap } from "../../contracts/adapters/mapAdapter.ts";
 
 export type ReconciliationAction =
@@ -95,7 +96,7 @@ export const INITIAL_DIAGNOSTICS: ReconciliationDiagnostics = {
 export const INITIAL_RECONCILIATION_STATE: ReconciliationState = {
   snapshot: null,
   connectionState: "LoadingSnapshot",
-  transportMode: "FIXTURE_STREAM",
+  transportMode: "LIVE_WEBSOCKET",
   cursor: { streamId: "operations", eventSequence: 0 },
   diagnostics: INITIAL_DIAGNOSTICS,
 };
@@ -293,6 +294,8 @@ function applyRobot(
     orderUpdateId: payload.orderUpdateId,
     sessionEpoch: payload.sessionEpoch,
     simulatorId: payload.simulatorId,
+    stationActionsVersion: payload.stationActionsVersion,
+    stationState: payload.stationState,
     batteryPercent: payload.batteryPercent ?? existing?.batteryPercent ?? 100,
   };
   return {
@@ -336,6 +339,7 @@ function applyOrder(
         robotId: String(value.robotId || ""),
         goalColumn: Number(value.goalColumn) || 0,
         goalRow: Number(value.goalRow) || 0,
+        arrivalAction: adaptArrivalAction(value.arrivalAction),
       }))
     : existing?.assignments || [];
   const map = data.map as Record<string, unknown> | undefined;
@@ -345,7 +349,11 @@ function applyOrder(
       ? data.orderUpdateId
       : existing?.orderUpdateId || 0;
 
-  const submittedAtUtc = existing?.submittedAtUtc || event.occurredAt;
+  const submittedAtUtc =
+    typeof data.submittedAt === "string"
+      ? data.submittedAt
+      : existing?.submittedAtUtc ||
+        (state === "Submitted" ? event.occurredAt : undefined);
   const updatedAtUtc =
     typeof data.updatedAt === "string" ? data.updatedAt : event.occurredAt;
 
@@ -354,7 +362,7 @@ function applyOrder(
     {
       id: `tl-${operation.entityId}-0`,
       state: "Submitted",
-      occurredAtUtc: submittedAtUtc,
+      occurredAtUtc: submittedAtUtc || event.occurredAt,
       orderUpdateId: 0,
       actor: "Operator",
       detail: "Order submitted",
@@ -413,6 +421,8 @@ function applyOrder(
         ? data.planRevisionId
         : existing?.planRevisionId,
     state,
+    requestId:
+      typeof data.requestId === "string" ? data.requestId : existing?.requestId,
     assignments,
     mapId:
       typeof data.mapId === "string"

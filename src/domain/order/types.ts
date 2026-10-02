@@ -20,6 +20,7 @@ export interface OrderAssignment {
   robotId: string;
   goalColumn: number;
   goalRow: number;
+  arrivalAction?: import("../../contracts/generated.ts").StationAction;
 }
 
 export interface OrderTimelineEntry {
@@ -35,6 +36,7 @@ export interface OrderTimelineEntry {
 }
 
 export interface Order {
+  requestId?: string;
   id: string;
   entityVersion: number;
   contentDigestSha256?: string;

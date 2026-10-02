@@ -136,7 +136,12 @@ export class CoreApiClient {
     payload: CancelOrderRequest,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
-    return this.unsupportedMutation("CANCEL_ORDER", options.requestId);
+    const { orderId, ...command } = payload;
+    return this.postMutation(
+      `${this.baseUrl}/api/v1/orders/${encodeURIComponent(orderId)}/cancel`,
+      { ...command, requestId: options.requestId },
+      options,
+    );
   }
 
   /**

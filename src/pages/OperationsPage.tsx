@@ -11,8 +11,6 @@ import {
   EmptyStateView,
   ErrorStateView,
 } from "../components/common/StateViews.tsx";
-import { IncidentStrip } from "../components/common/IncidentStrip.tsx";
-import { OrderCreateModal } from "../components/orders/OrderCreateModal.tsx";
 import { OrderActionDialog } from "../components/orders/OrderActionDialog.tsx";
 import { IncidentCenter } from "../components/incidents/IncidentCenter.tsx";
 import {
@@ -626,9 +624,7 @@ export const OperationsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Phase 3 Modals & Floating Strips */}
-      <IncidentStrip />
-      <OrderCreateModal />
+      {/* Phase 3 Modals */}
       <OrderActionDialog />
       <IncidentCenter />
     </div>

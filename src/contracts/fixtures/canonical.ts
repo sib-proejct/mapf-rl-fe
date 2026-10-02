@@ -5,63 +5,18 @@
  * Scaled to a realistic 32x20 Automated Fulfillment Center layout (640 cells, 1.0m/cell).
  */
 
-const WIDTH_CELLS = 32;
-const HEIGHT_CELLS = 20;
-
-// Generate 32x20 warehouse cells with structural pillars and storage racks (treated as pillars)
-const generateWarehouseCells = (): number[] => {
-  const cells: number[] = [];
-  for (let r = 0; r < HEIGHT_CELLS; r++) {
-    for (let c = 0; c < WIDTH_CELLS; c++) {
-      // Specified 6 structural pillars: B-19(7,15), E-19(19,15), B-11(7,11), E-11(19,11), B-01(7,4), E-01(19,4)
-      const isPillar =
-        (c === 7 || c === 19) && (r === 4 || r === 11 || r === 15);
-
-      // Storage Rack Pods (Bays A ~ F, excluding overwritten pillar cells & row 9-10 central crossway)
-      const isRack =
-        !isPillar &&
-        r >= 4 &&
-        r <= HEIGHT_CELLS - 5 &&
-        r !== 9 &&
-        r !== 10 &&
-        (c === 2 ||
-          c === 3 ||
-          c === 7 ||
-          c === 8 ||
-          c === 11 ||
-          c === 12 ||
-          c === 15 ||
-          c === 16 ||
-          c === 19 ||
-          c === 20 ||
-          c === 23 ||
-          c === 24);
-
-      cells.push(isPillar || isRack ? 1 : 0);
-    }
-  }
-  return cells;
-};
+import warehouseMap from "./warehouse-map.json" with { type: "json" };
+import warehouseStations from "./warehouse-stations.json" with { type: "json" };
 
 export const CANONICAL_MAP_FIXTURE = {
-  contractVersion: "1.0.0",
+  ...warehouseMap,
+  stationCatalog: warehouseStations.stations,
+  stationCatalogDigestSha256:
+    "28c68d05544e033bdd51924865ef43925899c04c702149995b4ee6b9d3effa55",
   mapId: "00000000-0000-4000-8000-000000000001",
   revision: 0,
   contentDigestSha256:
     "1111111111111111111111111111111111111111111111111111111111111111",
-  coordinateFrame: {
-    name: "map",
-    handedness: "RIGHT_HANDED",
-    xAxis: "EAST",
-    yAxis: "NORTH",
-    zAxis: "UP",
-    yaw: "COUNTERCLOCKWISE_FROM_POSITIVE_X_RADIANS",
-  },
-  origin: { xMeters: 0.0, yMeters: 0.0 },
-  resolutionMeters: 1.0,
-  widthCells: WIDTH_CELLS,
-  heightCells: HEIGHT_CELLS,
-  cells: generateWarehouseCells(),
 };
 
 export const CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE = {

@@ -1,3 +1,4 @@
+import { adaptStationState } from "./stationAdapter.ts";
 /**
  * Boundary adapter and validator for inbound WebSocket messages from Core /ws/v1.
  */
@@ -45,7 +46,7 @@ export function adaptStreamEnvelope(raw: unknown): StreamEnvelope {
 
   const obj = parsed as Record<string, unknown>;
 
-  if (obj.contractVersion !== "1.0.0") {
+  if (!["1.0.0", "1.1.0"].includes(String(obj.contractVersion))) {
     throw new EventValidationError(
       `Incompatible stream contractVersion: expected "1.0.0", got "${obj.contractVersion}"`,
       "INCOMPATIBLE_CONTRACT_VERSION",
@@ -228,7 +229,13 @@ export function adaptRobotStateReport(
     connectivity,
     safety,
     activeController,
-    batteryPercent,
+    stationActionsVersion:
+      typeof payload.stationActionsVersion === "string"
+        ? payload.stationActionsVersion
+        : undefined,
+    stationState: adaptStationState(payload.stationState),
+    batteryPercent:
+      adaptStationState(payload.stationState)?.batteryPercent ?? batteryPercent,
     orderId: typeof payload.orderId === "string" ? payload.orderId : undefined,
     orderUpdateId:
       typeof payload.orderUpdateId === "number"

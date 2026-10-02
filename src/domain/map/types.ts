@@ -26,6 +26,13 @@ export interface RasterMap {
   resolutionMeters: number;
   widthCells: number;
   heightCells: number;
+  stationCatalog?: {
+    column: number;
+    row: number;
+    type: "pick" | "place" | "charger";
+    name: string;
+  }[];
+  stationCatalogDigestSha256?: string;
   cells: number[]; // 0 = traversable, 1 = blocked
 }
 

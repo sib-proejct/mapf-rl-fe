@@ -1,3 +1,5 @@
+import { NodeMoveConfirmation } from "./NodeMoveConfirmation.tsx";
+import { useRobotTrails } from "./useRobotTrails.ts";
 import React, {
   useState,
   useRef,
@@ -56,11 +58,13 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     setSelectedRobotId,
     selectedNodeId,
     setSelectedNodeId,
+    clickNode,
     topology,
   } = useOperations();
 
   const map = snapshot?.map;
   const robots = useMemo(() => snapshot?.robots || [], [snapshot?.robots]);
+  const robotTrails = useRobotTrails(robots, `${map?.mapId}:${map?.revision}`);
   const orders = useMemo(() => snapshot?.orders || [], [snapshot?.orders]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -111,22 +115,6 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     }),
     [widthCells, heightCells, resolution, origin],
   );
-
-  const selectedRobot = useMemo(
-    () => robots.find((r) => r.id === selectedRobotId) || null,
-    [robots, selectedRobotId],
-  );
-
-  const selectedGoalAssignment = useMemo(() => {
-    if (!selectedRobot) return null;
-    for (const order of orders) {
-      const assign = order.assignments.find(
-        (a) => a.robotId === selectedRobot.id,
-      );
-      if (assign) return assign;
-    }
-    return null;
-  }, [selectedRobot, orders]);
 
   // Selected Node Details
   const selectedNodeDetails = useMemo(() => {
@@ -190,7 +178,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     const bgCtx = bgCanvas.getContext("2d");
     if (!bgCtx) return;
 
-    bgCtx.scale(2, 2);
+    bgCtx.scale(bgCanvas.width / baseWidth, bgCanvas.height / baseHeight);
 
     // 1. Clear background surface
     bgCtx.fillStyle = isDark ? "#161618" : "#FBFBFD";
@@ -536,7 +524,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     }
 
     ctx.save();
-    ctx.scale(dpr, dpr);
+    ctx.scale(canvas.width / rect.width, canvas.height / rect.height);
     ctx.clearRect(0, 0, rect.width, rect.height);
 
     // Apply Pan and Zoom
@@ -598,33 +586,26 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
       }
     }
 
-    // 4. Trajectory Trail & Path for Selected Robot
-    if (showTrails && selectedRobot && selectedGoalAssignment) {
-      const startPos = worldToScreen(
-        { x: selectedRobot.pose.xMeters, y: selectedRobot.pose.yMeters },
-        mapDim,
-        baseWidth,
-        baseHeight,
-      );
-      const goalPoint = cellToWorld(
-        {
-          column: selectedGoalAssignment.goalColumn,
-          row: selectedGoalAssignment.goalRow,
-        },
-        resolution,
-        origin,
-      );
-      const goalPos = worldToScreen(goalPoint, mapDim, baseWidth, baseHeight);
-
+    // 4. Observed movement trail, displayed as a dashed line.
+    if (showTrails) {
       ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(startPos.x, startPos.y);
-      ctx.lineTo(goalPos.x, goalPos.y);
-      ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
-      ctx.lineWidth = 3;
-      ctx.setLineDash([6, 4]);
       ctx.lineCap = "round";
-      ctx.stroke();
+      ctx.lineJoin = "round";
+      ctx.setLineDash([6 / zoom, 4 / zoom]);
+      for (const [robotId, trail] of robotTrails.current) {
+        if (trail.points.length < 2) continue;
+        const selected = robotId === selectedRobotId;
+        ctx.strokeStyle = isDark ? "#64D2FF" : "#0071E3";
+        ctx.globalAlpha = selected ? 1 : 0.65;
+        ctx.lineWidth = (selected ? 3 : 2) / zoom;
+        ctx.beginPath();
+        trail.points.forEach((point, index) => {
+          const screen = worldToScreen(point, mapDim, baseWidth, baseHeight);
+          if (index === 0) ctx.moveTo(screen.x, screen.y);
+          else ctx.lineTo(screen.x, screen.y);
+        });
+        ctx.stroke();
+      }
       ctx.restore();
     }
 
@@ -639,6 +620,8 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     if (showGoals && orders.length > 0) {
       ctx.save();
       for (const order of orders) {
+        if (["Completed", "Cancelled", "Rejected"].includes(order.state))
+          continue;
         for (const assign of order.assignments) {
           const gx = (assign.goalColumn + 0.5) * cellW;
           const gy = (heightCells - 1 - assign.goalRow + 0.5) * cellH;
@@ -759,7 +742,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
         ctx.fillStyle = isDark ? "#1C1C1E" : "#FFFFFF";
         ctx.fill();
         ctx.lineWidth = isSelected
-          ? Math.max(2.0, robotRadius * 0.25)
+          ? Math.max(2, robotRadius * 0.25)
           : Math.max(1.2, robotRadius * 0.18);
         ctx.strokeStyle = robotColor;
         ctx.stroke();
@@ -867,8 +850,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     orders,
     selectedRobotId,
     selectedNodeId,
-    selectedRobot,
-    selectedGoalAssignment,
+    robotTrails,
     hoverCoord,
     topology,
     mapDim,
@@ -937,7 +919,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
         const nx = (node.column + 0.5) * cellW;
         const ny = (heightCells - 1 - node.row + 0.5) * cellH;
         if (Math.hypot(clickCanvasX - nx, clickCanvasY - ny) < 16) {
-          setSelectedNodeId(node.id);
+          void clickNode(node.id);
           return;
         }
       }
@@ -948,6 +930,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
   // Pan and Drag Handlers
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.target !== canvasRef.current) return;
     if (e.button !== 0) return;
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
@@ -1162,16 +1145,20 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
         {/* Floating Node Inspector Popover Card (Anchored to node) */}
         {selectedNodeDetails && hudPlacement && (
           <div
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             className="absolute z-20 w-[310px] max-w-[calc(100%-1.5rem)] apple-card p-3.5 shadow-2xl border border-black/[0.08] dark:border-white/[0.12] bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-xl animate-fade-in transition-[left,top] duration-150 ease-out"
             style={{
               left: `${hudPlacement.left}px`,
               top: `${hudPlacement.top}px`,
             }}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-black/[0.05] dark:border-white/[0.08]">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 justify-between pb-3 border-b border-black/[0.05] dark:border-white/[0.08]">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 <div
-                  className={`w-7 h-7 rounded-xl flex items-center justify-center ${selectedNodeDetails.uiMeta.badgeBg}`}
+                  className={`w-7 h-7 shrink-0 rounded-xl flex items-center justify-center ${selectedNodeDetails.uiMeta.badgeBg}`}
                 >
                   {selectedNodeDetails.node.type === "rack" && (
                     <Boxes className="w-4 h-4 text-indigo-500" />
@@ -1195,18 +1182,19 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
                     <MapPin className="w-4 h-4 text-[#0071E3] dark:text-[#2997FF]" />
                   )}
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <div className="min-w-0">
+                  <h4 className="truncate text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
                     {selectedNodeDetails.node.name}
                   </h4>
-                  <span className="text-[10px] text-[#86868B]">
+                  <span className="block truncate text-[10px] text-[#86868B]">
                     {selectedNodeDetails.node.zone}
                   </span>
                 </div>
               </div>
+              <NodeMoveConfirmation nodeId={selectedNodeDetails.node.id} />
               <button
                 onClick={() => setSelectedNodeId(null)}
-                className="w-6 h-6 rounded-lg flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                className="w-6 h-6 shrink-0 rounded-lg flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/5 dark:hover:bg-white/5 transition-all"
                 title="Close inspector"
               >
                 <X className="w-3.5 h-3.5" />

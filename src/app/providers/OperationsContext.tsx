@@ -1,3 +1,4 @@
+import { isNodeCommandTransportReady } from "../../domain/order/nodeCommand.ts";
 import React, {
   createContext,
   useContext,
@@ -76,7 +77,21 @@ export interface ActionDialogTarget {
   incident?: Incident;
 }
 
+export interface NodeCommand {
+  robotId: string;
+  nodeId: number;
+  state: "submitting" | "confirmed" | "uncertain" | "rejected";
+  mutation?: PendingMutation;
+  error?: string;
+}
 export interface OperationsContextType {
+  clickNode: (nodeId: number) => Promise<void>;
+  nodeConfirmation: { robotId: string; nodeId: number } | null;
+  confirmNodeCommand: () => Promise<void>;
+  dismissNodeConfirmation: () => void;
+  nodeCommand: NodeCommand | null;
+  retryNodeCommand: () => Promise<void>;
+
   // Snapshot and operational entity state
   snapshot: AuthoritativeSnapshot | null;
   loading: boolean;
@@ -202,7 +217,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Transports & simulation modes
   const [transportMode, setTransportModeState] =
-    useState<StreamTransportMode>("FIXTURE_STREAM");
+    useState<StreamTransportMode>("LIVE_WEBSOCKET");
   const [mockScenario, setMockScenarioState] =
     useState<MockScenario>("nominal_10hz");
   const [fixtureMode, setFixtureModeState] = useState<FixtureMode>("current");
@@ -524,6 +539,18 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       req: CreateOrderInput,
       options?: { timeoutMs?: number; forcedRequestId?: string },
     ): Promise<PendingMutation> => {
+      if (
+        !options?.forcedRequestId &&
+        globalMutationManager
+          .getAll()
+          .some(
+            (mutation) =>
+              mutation.operation === "CREATE_ORDER" &&
+              ["submitting", "uncertain"].includes(mutation.state),
+          )
+      ) {
+        throw new Error("기존 주문의 응답을 먼저 확인하세요.");
+      }
       const mut = globalMutationManager.startMutation(
         "CREATE_ORDER",
         req as unknown as Record<string, unknown>,
@@ -537,6 +564,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         const nowIso = new Date().toISOString();
         const newOrder: Order = {
           id: orderId,
+          requestId: mut.requestId,
           entityVersion: 1,
           orderUpdateId: 0,
           state: "Submitted",
@@ -961,9 +989,222 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
     dispatch({ type: "RESET_DIAGNOSTICS" });
   }, []);
 
+  // Keep the retired local demo robot out of the operator view.
+  const visibleSnapshot = useMemo(() => {
+    const snapshot = reconState.snapshot;
+    if (!snapshot || transportMode === "FIXTURE_STREAM") return snapshot;
+    return {
+      ...snapshot,
+      robots: snapshot.robots.filter((robot) => robot.id !== "local-robot-1"),
+    };
+  }, [reconState.snapshot, transportMode]);
+
+  const [nodeCommand, setNodeCommand] = useState<NodeCommand | null>(null);
+  const nodeSubmitting = useRef(false);
+  useEffect(() => {
+    setNodeCommand((command) => {
+      const mutation = pendingMutations.find(
+        (mutation) => mutation.requestId === command?.mutation?.requestId,
+      );
+      if (
+        !command ||
+        !mutation ||
+        !["confirmed", "uncertain", "rejected"].includes(mutation.state) ||
+        command.state === mutation.state
+      )
+        return command;
+      return {
+        ...command,
+        mutation,
+        state: mutation.state as NodeCommand["state"],
+      };
+    });
+  }, [pendingMutations]);
+
+  const [nodeConfirmation, setNodeConfirmation] = useState<{
+    robotId: string;
+    nodeId: number;
+  } | null>(null);
+  const selectRobot = useCallback((id: string | null) => {
+    setNodeConfirmation(null);
+    setSelectedRobotId(id);
+    setSelectedNodeId(null);
+    setNodeCommand((command) =>
+      command?.state === "uncertain" || command?.state === "submitting"
+        ? command
+        : null,
+    );
+  }, []);
+  const clickNode = async (nodeId: number) => {
+    setSelectedNodeId(nodeId);
+    if (!selectedRobotId) return;
+    if (nodeSubmitting.current) return;
+    setNodeConfirmation({ robotId: selectedRobotId, nodeId });
+  };
+  const confirmNodeCommand = async () => {
+    if (
+      !nodeConfirmation ||
+      nodeConfirmation.robotId !== selectedRobotId ||
+      nodeConfirmation.nodeId !== selectedNodeId
+    )
+      return;
+    const { nodeId } = nodeConfirmation;
+    if (
+      nodeSubmitting.current ||
+      pendingMutations.some(
+        (mutation) =>
+          mutation.operation === "CREATE_ORDER" &&
+          ["submitting", "uncertain"].includes(mutation.state),
+      )
+    )
+      return;
+    const robot = visibleSnapshot?.robots.find(
+      (robot) => robot.id === selectedRobotId,
+    );
+    const node = topology?.nodeMap.get(nodeId);
+    const map = visibleSnapshot?.map;
+    const status = { robotId: selectedRobotId, nodeId };
+    const reject = (error: string) =>
+      setNodeCommand({ ...status, state: "rejected", error });
+    if (!robot || !node || !map) {
+      reject("로봇과 맵 정보를 불러온 뒤 다시 선택하세요.");
+      return;
+    }
+    if (
+      robot.connectivity !== "CONNECTED" ||
+      robot.operationalState !== "IDLE" ||
+      robot.safety !== "NORMAL" ||
+      robot.freshness !== "CURRENT" ||
+      !isNodeCommandTransportReady(
+        transportMode,
+        reconState.connectionState,
+        wsClientRef.current?.isConnected ?? false,
+      )
+    ) {
+      reject("연결된 안전 상태의 유휴 로봇만 이동할 수 있습니다.");
+      return;
+    }
+    if (
+      visibleSnapshot?.orders.some(
+        (order) =>
+          !["Completed", "Cancelled", "Rejected"].includes(order.state) &&
+          order.assignments.some(
+            (assignment) => assignment.robotId === robot.id,
+          ),
+      )
+    ) {
+      reject("이 로봇은 이미 작업 중입니다.");
+      return;
+    }
+    if (!node.isTraversable) {
+      reject("장애물 노드로 이동할 수 없습니다.");
+      return;
+    }
+    if (
+      map.stationCatalog === undefined &&
+      ["pick", "place", "charger"].includes(node.type)
+    ) {
+      reject(
+        "Core의 작업 노드 정보를 확인할 수 없습니다. 맵을 새로고침하세요.",
+      );
+      return;
+    }
+    const station = map.stationCatalog?.find(
+      (station) => station.column === node.column && station.row === node.row,
+    );
+    const arrivalAction =
+      station?.type === "pick"
+        ? ("PICK" as const)
+        : station?.type === "place"
+          ? ("PLACE" as const)
+          : station?.type === "charger"
+            ? ("CHARGE" as const)
+            : undefined;
+    if (arrivalAction && robot.stationActionsVersion !== "1.1.0") {
+      reject("이 로봇은 적재·하역·충전 작업을 지원하지 않습니다.");
+      return;
+    }
+    if (arrivalAction === "PICK" && robot.stationState?.loaded !== false) {
+      reject("빈 로봇만 pick 작업을 할 수 있습니다.");
+      return;
+    }
+    if (arrivalAction === "PLACE" && robot.stationState?.loaded !== true) {
+      reject("적재된 로봇만 place 작업을 할 수 있습니다.");
+      return;
+    }
+    nodeSubmitting.current = true;
+    setNodeCommand({ ...status, state: "submitting" });
+    try {
+      const mutation = await createOrder({
+        mapId: map.mapId,
+        mapRevision: map.revision,
+        assignments: [
+          {
+            robotId: robot.id,
+            goalColumn: node.column,
+            goalRow: node.row,
+            ...(arrivalAction ? { arrivalAction } : {}),
+          },
+        ],
+      });
+      if (mutation.state !== "rejected") setNodeConfirmation(null);
+      setNodeCommand({
+        ...status,
+        state:
+          mutation.state === "confirmed"
+            ? "confirmed"
+            : mutation.state === "uncertain"
+              ? "uncertain"
+              : "rejected",
+        mutation,
+      });
+    } catch (error) {
+      reject(
+        error instanceof Error
+          ? error.message
+          : "이동 명령 제출에 실패했습니다.",
+      );
+    } finally {
+      nodeSubmitting.current = false;
+    }
+  };
+  const retryNodeCommand = async () => {
+    if (
+      !nodeCommand?.mutation ||
+      nodeSubmitting.current ||
+      nodeCommand.state !== "uncertain"
+    )
+      return;
+    nodeSubmitting.current = true;
+    const command = nodeCommand;
+    setNodeCommand({ ...command, state: "submitting" });
+    try {
+      const mutation = await retryMutation(command.mutation!.requestId);
+      setNodeCommand({
+        ...command,
+        mutation,
+        state:
+          mutation.state === "confirmed"
+            ? "confirmed"
+            : mutation.state === "uncertain"
+              ? "uncertain"
+              : "rejected",
+      });
+    } catch (error) {
+      setNodeCommand({
+        ...command,
+        state: "uncertain",
+        error:
+          error instanceof Error ? error.message : "재시도에 실패했습니다.",
+      });
+    } finally {
+      nodeSubmitting.current = false;
+    }
+  };
+
   // Entity selections
   const selectedRobot =
-    reconState.snapshot?.robots.find((r) => r.id === selectedRobotId) || null;
+    visibleSnapshot?.robots.find((r) => r.id === selectedRobotId) || null;
   const selectedOrder =
     reconState.snapshot?.orders.find((o) => o.id === selectedOrderId) || null;
   const selectedIncident =
@@ -977,13 +1218,19 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
   return (
     <OperationsContext.Provider
       value={{
-        snapshot: reconState.snapshot,
+        snapshot: visibleSnapshot,
         loading,
         error,
         lastFetchedAt,
         refreshSnapshot,
         selectedRobotId,
-        setSelectedRobotId,
+        setSelectedRobotId: selectRobot,
+        clickNode,
+        nodeConfirmation,
+        confirmNodeCommand,
+        dismissNodeConfirmation: () => setNodeConfirmation(null),
+        nodeCommand,
+        retryNodeCommand,
         selectedRobot,
         selectedOrderId,
         setSelectedOrderId,

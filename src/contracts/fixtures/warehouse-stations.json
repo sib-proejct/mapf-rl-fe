@@ -1,0 +1,799 @@
+{
+  "mapId": "123e4567-e89b-42d3-a456-426614174032",
+  "mapRevision": 1,
+  "stations": [
+    {
+      "column": 3,
+      "row": 0,
+      "type": "place",
+      "name": "Place WS-01 (Place Station)"
+    },
+    {
+      "column": 8,
+      "row": 0,
+      "type": "place",
+      "name": "Place WS-02 (Place Station)"
+    },
+    {
+      "column": 13,
+      "row": 0,
+      "type": "place",
+      "name": "Place WS-03 (Place Station)"
+    },
+    {
+      "column": 18,
+      "row": 0,
+      "type": "place",
+      "name": "Place WS-04 (Place Station)"
+    },
+    {
+      "column": 23,
+      "row": 0,
+      "type": "place",
+      "name": "Place WS-05 (Place Station)"
+    },
+    {
+      "column": 28,
+      "row": 0,
+      "type": "place",
+      "name": "Place WS-06 (Place Station)"
+    },
+    {
+      "column": 1,
+      "row": 4,
+      "type": "pick",
+      "name": "Pick (A-01)"
+    },
+    {
+      "column": 4,
+      "row": 4,
+      "type": "pick",
+      "name": "Pick (A-02)"
+    },
+    {
+      "column": 9,
+      "row": 4,
+      "type": "pick",
+      "name": "Pick (B-02)"
+    },
+    {
+      "column": 10,
+      "row": 4,
+      "type": "pick",
+      "name": "Pick (C-01)"
+    },
+    {
+      "column": 13,
+      "row": 4,
+      "type": "pick",
+      "name": "Pick (C-02)"
+    },
+    {
+      "column": 14,
+      "row": 4,
+      "type": "pick",
+      "name": "Pick (D-01)"
+    },
+    {
+      "column": 17,
+      "row": 4,
+      "type": "pick",
+      "name": "Pick (D-02)"
+    },
+    {
+      "column": 21,
+      "row": 4,
+      "type": "pick",
+      "name": "Pick (E-02)"
+    },
+    {
+      "column": 22,
+      "row": 4,
+      "type": "pick",
+      "name": "Pick (F-01)"
+    },
+    {
+      "column": 25,
+      "row": 4,
+      "type": "pick",
+      "name": "Pick (F-02)"
+    },
+    {
+      "column": 31,
+      "row": 4,
+      "type": "charger",
+      "name": "Charger-01"
+    },
+    {
+      "column": 1,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (A-03)"
+    },
+    {
+      "column": 4,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (A-04)"
+    },
+    {
+      "column": 6,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (B-03)"
+    },
+    {
+      "column": 9,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (B-04)"
+    },
+    {
+      "column": 10,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (C-03)"
+    },
+    {
+      "column": 13,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (C-04)"
+    },
+    {
+      "column": 14,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (D-03)"
+    },
+    {
+      "column": 17,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (D-04)"
+    },
+    {
+      "column": 18,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (E-03)"
+    },
+    {
+      "column": 21,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (E-04)"
+    },
+    {
+      "column": 22,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (F-03)"
+    },
+    {
+      "column": 25,
+      "row": 5,
+      "type": "pick",
+      "name": "Pick (F-04)"
+    },
+    {
+      "column": 1,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (A-05)"
+    },
+    {
+      "column": 4,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (A-06)"
+    },
+    {
+      "column": 6,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (B-05)"
+    },
+    {
+      "column": 9,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (B-06)"
+    },
+    {
+      "column": 10,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (C-05)"
+    },
+    {
+      "column": 13,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (C-06)"
+    },
+    {
+      "column": 14,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (D-05)"
+    },
+    {
+      "column": 17,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (D-06)"
+    },
+    {
+      "column": 18,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (E-05)"
+    },
+    {
+      "column": 21,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (E-06)"
+    },
+    {
+      "column": 22,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (F-05)"
+    },
+    {
+      "column": 25,
+      "row": 6,
+      "type": "pick",
+      "name": "Pick (F-06)"
+    },
+    {
+      "column": 31,
+      "row": 6,
+      "type": "charger",
+      "name": "Charger-02"
+    },
+    {
+      "column": 1,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (A-07)"
+    },
+    {
+      "column": 4,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (A-08)"
+    },
+    {
+      "column": 6,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (B-07)"
+    },
+    {
+      "column": 9,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (B-08)"
+    },
+    {
+      "column": 10,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (C-07)"
+    },
+    {
+      "column": 13,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (C-08)"
+    },
+    {
+      "column": 14,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (D-07)"
+    },
+    {
+      "column": 17,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (D-08)"
+    },
+    {
+      "column": 18,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (E-07)"
+    },
+    {
+      "column": 21,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (E-08)"
+    },
+    {
+      "column": 22,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (F-07)"
+    },
+    {
+      "column": 25,
+      "row": 7,
+      "type": "pick",
+      "name": "Pick (F-08)"
+    },
+    {
+      "column": 1,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (A-09)"
+    },
+    {
+      "column": 4,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (A-10)"
+    },
+    {
+      "column": 6,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (B-09)"
+    },
+    {
+      "column": 9,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (B-10)"
+    },
+    {
+      "column": 10,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (C-09)"
+    },
+    {
+      "column": 13,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (C-10)"
+    },
+    {
+      "column": 14,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (D-09)"
+    },
+    {
+      "column": 17,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (D-10)"
+    },
+    {
+      "column": 18,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (E-09)"
+    },
+    {
+      "column": 21,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (E-10)"
+    },
+    {
+      "column": 22,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (F-09)"
+    },
+    {
+      "column": 25,
+      "row": 8,
+      "type": "pick",
+      "name": "Pick (F-10)"
+    },
+    {
+      "column": 31,
+      "row": 8,
+      "type": "charger",
+      "name": "Charger-03"
+    },
+    {
+      "column": 1,
+      "row": 11,
+      "type": "pick",
+      "name": "Pick (A-11)"
+    },
+    {
+      "column": 4,
+      "row": 11,
+      "type": "pick",
+      "name": "Pick (A-12)"
+    },
+    {
+      "column": 9,
+      "row": 11,
+      "type": "pick",
+      "name": "Pick (B-12)"
+    },
+    {
+      "column": 10,
+      "row": 11,
+      "type": "pick",
+      "name": "Pick (C-11)"
+    },
+    {
+      "column": 13,
+      "row": 11,
+      "type": "pick",
+      "name": "Pick (C-12)"
+    },
+    {
+      "column": 14,
+      "row": 11,
+      "type": "pick",
+      "name": "Pick (D-11)"
+    },
+    {
+      "column": 17,
+      "row": 11,
+      "type": "pick",
+      "name": "Pick (D-12)"
+    },
+    {
+      "column": 21,
+      "row": 11,
+      "type": "pick",
+      "name": "Pick (E-12)"
+    },
+    {
+      "column": 22,
+      "row": 11,
+      "type": "pick",
+      "name": "Pick (F-11)"
+    },
+    {
+      "column": 25,
+      "row": 11,
+      "type": "pick",
+      "name": "Pick (F-12)"
+    },
+    {
+      "column": 1,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (A-13)"
+    },
+    {
+      "column": 4,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (A-14)"
+    },
+    {
+      "column": 6,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (B-13)"
+    },
+    {
+      "column": 9,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (B-14)"
+    },
+    {
+      "column": 10,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (C-13)"
+    },
+    {
+      "column": 13,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (C-14)"
+    },
+    {
+      "column": 14,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (D-13)"
+    },
+    {
+      "column": 17,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (D-14)"
+    },
+    {
+      "column": 18,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (E-13)"
+    },
+    {
+      "column": 21,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (E-14)"
+    },
+    {
+      "column": 22,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (F-13)"
+    },
+    {
+      "column": 25,
+      "row": 12,
+      "type": "pick",
+      "name": "Pick (F-14)"
+    },
+    {
+      "column": 31,
+      "row": 12,
+      "type": "charger",
+      "name": "Charger-04"
+    },
+    {
+      "column": 1,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (A-15)"
+    },
+    {
+      "column": 4,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (A-16)"
+    },
+    {
+      "column": 6,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (B-15)"
+    },
+    {
+      "column": 9,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (B-16)"
+    },
+    {
+      "column": 10,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (C-15)"
+    },
+    {
+      "column": 13,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (C-16)"
+    },
+    {
+      "column": 14,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (D-15)"
+    },
+    {
+      "column": 17,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (D-16)"
+    },
+    {
+      "column": 18,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (E-15)"
+    },
+    {
+      "column": 21,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (E-16)"
+    },
+    {
+      "column": 22,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (F-15)"
+    },
+    {
+      "column": 25,
+      "row": 13,
+      "type": "pick",
+      "name": "Pick (F-16)"
+    },
+    {
+      "column": 1,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (A-17)"
+    },
+    {
+      "column": 4,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (A-18)"
+    },
+    {
+      "column": 6,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (B-17)"
+    },
+    {
+      "column": 9,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (B-18)"
+    },
+    {
+      "column": 10,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (C-17)"
+    },
+    {
+      "column": 13,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (C-18)"
+    },
+    {
+      "column": 14,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (D-17)"
+    },
+    {
+      "column": 17,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (D-18)"
+    },
+    {
+      "column": 18,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (E-17)"
+    },
+    {
+      "column": 21,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (E-18)"
+    },
+    {
+      "column": 22,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (F-17)"
+    },
+    {
+      "column": 25,
+      "row": 14,
+      "type": "pick",
+      "name": "Pick (F-18)"
+    },
+    {
+      "column": 31,
+      "row": 14,
+      "type": "charger",
+      "name": "Charger-05"
+    },
+    {
+      "column": 1,
+      "row": 15,
+      "type": "pick",
+      "name": "Pick (A-19)"
+    },
+    {
+      "column": 4,
+      "row": 15,
+      "type": "pick",
+      "name": "Pick (A-20)"
+    },
+    {
+      "column": 9,
+      "row": 15,
+      "type": "pick",
+      "name": "Pick (B-20)"
+    },
+    {
+      "column": 10,
+      "row": 15,
+      "type": "pick",
+      "name": "Pick (C-19)"
+    },
+    {
+      "column": 13,
+      "row": 15,
+      "type": "pick",
+      "name": "Pick (C-20)"
+    },
+    {
+      "column": 14,
+      "row": 15,
+      "type": "pick",
+      "name": "Pick (D-19)"
+    },
+    {
+      "column": 17,
+      "row": 15,
+      "type": "pick",
+      "name": "Pick (D-20)"
+    },
+    {
+      "column": 21,
+      "row": 15,
+      "type": "pick",
+      "name": "Pick (E-20)"
+    },
+    {
+      "column": 22,
+      "row": 15,
+      "type": "pick",
+      "name": "Pick (F-19)"
+    },
+    {
+      "column": 25,
+      "row": 15,
+      "type": "pick",
+      "name": "Pick (F-20)"
+    },
+    {
+      "column": 31,
+      "row": 16,
+      "type": "charger",
+      "name": "Charger-06"
+    },
+    {
+      "column": 3,
+      "row": 19,
+      "type": "place",
+      "name": "Place Chute-01 (Place Station)"
+    },
+    {
+      "column": 8,
+      "row": 19,
+      "type": "place",
+      "name": "Place Chute-02 (Place Station)"
+    },
+    {
+      "column": 13,
+      "row": 19,
+      "type": "place",
+      "name": "Place Chute-03 (Place Station)"
+    },
+    {
+      "column": 18,
+      "row": 19,
+      "type": "place",
+      "name": "Place Chute-04 (Place Station)"
+    },
+    {
+      "column": 23,
+      "row": 19,
+      "type": "place",
+      "name": "Place Chute-05 (Place Station)"
+    },
+    {
+      "column": 28,
+      "row": 19,
+      "type": "place",
+      "name": "Place Chute-06 (Place Station)"
+    }
+  ],
+  "catalogVersion": "1.1.0"
+}

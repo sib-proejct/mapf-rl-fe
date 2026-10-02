@@ -965,3 +965,17 @@ FE rollback은 Core가 유지한 previous major contract와 generated consumer r
 | 테스트와 안전한 배포 | 18~21 | 16~19 | 19~23 |
 
 이 문서의 확정 기준선을 구현 편의를 위해 암묵적으로 변경하지 않는다. Public contract, security·safety boundary 또는 component 책임에 영향을 주는 변경은 ADR, 새 contract version, producer/consumer 영향 분석과 상위 아키텍처 및 대응 설계 갱신을 먼저 수행한다.
+
+
+## Robot-to-node station orders
+
+Both Canvas implementations and the accessible list use the same node confirmation.
+The existing node inspector header shows Yes/No beside the node name. Only Yes
+submits after revalidating the selected robot; No/Escape dismiss confirmation.
+Actual transport connectivity and the selected robot CURRENT state gate submission;
+a retired simulator in the aggregate snapshot must not block a connected robot.
+Selection effects do not submit orders. A new robot selection clears the destination.
+Core station catalogs determine action types, while Simulator capability/state
+gates action availability. Submission and uncertainty block duplicate writes; the
+task queue retries with the original requestId and waits for Core-confirmed completion.
+New Order is a single inline queue form. Inspector controls do not dispatch map clicks.

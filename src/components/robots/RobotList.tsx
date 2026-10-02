@@ -146,6 +146,13 @@ const InlineRobotInspector: React.FC<InlineRobotInspectorProps> = ({
         </div>
       </div>
 
+      {robot.stationState && (
+        <div className="text-xs text-[#86868B]" aria-live="polite">
+          {robot.stationState.loaded ? "적재됨" : "비어 있음"} ·{" "}
+          {robot.stationState.phase}
+        </div>
+      )}
+
       {/* 2. Active Controller & AI Policy */}
       <div className="bg-[#F5F5F7] dark:bg-[#252528] p-2.5 rounded-xl border border-black/[0.02] dark:border-white/[0.03] space-y-1.5">
         <div className="flex items-center justify-between">
