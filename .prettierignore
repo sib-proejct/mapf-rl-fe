@@ -1,0 +1,6 @@
+node_modules
+dist
+docs
+AGENTS.md
+src/contracts/generated.ts
+src/contracts/contracts.lock.json
