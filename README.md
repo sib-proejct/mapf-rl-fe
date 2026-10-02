@@ -1,5 +1,11 @@
 # MAPF-RL FE
 
+## 웹 화면
+
+운영(Operations) 화면 — Fixture 10Hz 모드의 예시 데이터로 맵과 로봇 함대, 작업 큐를 표시한다.
+
+![MAPF-RL 운영 화면: 창고 맵, 로봇 함대 상태, 작업 큐](docs/images/operations-fixture.png)
+
 ## 전체 로컬 환경 실행 (Docker Compose)
 
 Sibling 저장소가 같은 parent 아래 있고 Infra `.env`의 DB/Redis 설정이 준비되어 있으면:
