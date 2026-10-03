@@ -64,6 +64,57 @@ function browserCsrfToken(): string | null {
   return cookie ? decodeURIComponent(cookie.slice("mapf_csrf=".length)) : null;
 }
 
+/** Normalize operator input before recording or sending an immutable queue intent. */
+export function queueOrderInput(
+  payload: CreateOrderInput,
+):
+  | Omit<
+      import("../../contracts/queue.generated.ts").CreateQueueTaskRequest,
+      "requestId"
+    >
+  | Omit<
+      import("../../contracts/queue.generated.ts").CreateWaveRequest,
+      "requestId"
+    > {
+  if ("tasks" in payload)
+    return {
+      mapId: payload.mapId,
+      mapRevision: payload.mapRevision,
+      tasks: payload.tasks,
+    };
+  if ("assignments" in payload && payload.assignments.length !== 1)
+    throw new Error("Queue submission requires one robot assignment");
+  const task =
+    "task" in payload
+      ? payload.task
+      : "assignments" in payload
+        ? {
+            robotId: payload.assignments[0].robotId,
+            steps: [payload.assignments[0]],
+          }
+        : {
+            steps: [
+              {
+                goalColumn: payload.goalColumn,
+                goalRow: payload.goalRow,
+                ...(payload.arrivalAction
+                  ? { arrivalAction: payload.arrivalAction }
+                  : {}),
+              },
+            ],
+          };
+  const steps = task.steps.map(({ goalColumn, goalRow, arrivalAction }) => ({
+    goalColumn,
+    goalRow,
+    ...(arrivalAction ? { arrivalAction } : {}),
+  }));
+  return {
+    mapId: payload.mapId,
+    mapRevision: payload.mapRevision,
+    task: { ...task, steps },
+  };
+}
+
 /**
  * Versioned REST API client for MAPF-RL Core /api/v1.
  * Uses same-origin BFF and HttpOnly session cookies.
@@ -216,9 +267,34 @@ export class CoreApiClient {
     payload: CreateOrderInput,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
+    if ("task" in payload || "tasks" in payload)
+      return this.enqueueOrder(payload, options);
     return this.postMutation(
       `${this.baseUrl}/api/v1/orders${"assignments" in payload ? "" : "/auto-assign"}`,
       { ...payload, requestId: options.requestId },
+      options,
+    );
+  }
+
+  async enqueueOrder(
+    payload: CreateOrderInput,
+    options: MutationRequestOptions,
+  ): Promise<MutationOutcome> {
+    const command = queueOrderInput(payload);
+    return this.postMutation(
+      `${this.baseUrl}/api/v1/${"tasks" in command ? "waves" : "queue/tasks"}`,
+      { ...command, requestId: options.requestId },
+      options,
+    );
+  }
+
+  async cancelQueueTask(
+    taskId: string,
+    options: MutationRequestOptions,
+  ): Promise<MutationOutcome> {
+    return this.postMutation(
+      `${this.baseUrl}/api/v1/queue/tasks/${encodeURIComponent(taskId)}/cancel`,
+      { requestId: options.requestId },
       options,
     );
   }
@@ -351,7 +427,12 @@ export class CoreApiClient {
         const data = await response.json();
         return {
           status: "ACCEPTED",
-          entityId: data.orderId || data.robotId || data.id,
+          entityId:
+            data.taskId ||
+            data.waveId ||
+            data.orderId ||
+            data.robotId ||
+            data.id,
           entityVersion: data.entityVersion,
           orderUpdateId: data.orderUpdateId,
           data,

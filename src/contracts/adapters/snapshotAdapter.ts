@@ -1,3 +1,4 @@
+import { adaptQueueTask } from "./queueAdapter.ts";
 import { adaptBatteryPolicy } from "../../utils/battery.ts";
 import { adaptArrivalAction, adaptStationState } from "./stationAdapter.ts";
 import type {
@@ -105,6 +106,7 @@ export function adaptOperationsSnapshot(
   let currentMap: RasterMap | null = fallbackMap || null;
   const robots: Robot[] = [];
   const orders: Order[] = [];
+  const queueTasks: import("../queue.generated.ts").QueueTask[] = [];
   const incidents: Incident[] = [];
   const entityVersions: AuthoritativeSnapshot["entityVersions"] = {};
   const connectivityBySimulator = new Map<
@@ -138,7 +140,12 @@ export function adaptOperationsSnapshot(
       contentDigestSha256,
     };
 
-    if (entityType === "MAP") {
+    if (entityType === "QUEUE_TASK") {
+      const task = adaptQueueTask(payload);
+      if (task.taskId !== entityId || task.entityVersion !== entityVersion)
+        throw new Error("Queue task envelope mismatch");
+      queueTasks.push(task);
+    } else if (entityType === "MAP") {
       currentMap = adaptRasterMap(payload);
     } else if (entityType === "ROBOT") {
       const poseRaw =
@@ -517,6 +524,7 @@ export function adaptOperationsSnapshot(
     map: currentMap,
     robots,
     orders,
+    queueTasks,
     incidents,
   };
 }

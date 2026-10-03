@@ -264,6 +264,7 @@ export function adaptOperationsEvent(
     "MAP",
     "ROBOT",
     "ORDER",
+    "QUEUE_TASK",
     "INCIDENT",
     "PLAN_REVISION",
     "POLICY_DEPLOYMENT",

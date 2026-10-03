@@ -102,6 +102,7 @@ export interface OperationsEventPayload {
   entityType:
     | "MAP"
     | "ROBOT"
+    | "QUEUE_TASK"
     | "ORDER"
     | "INCIDENT"
     | "PLAN_REVISION"

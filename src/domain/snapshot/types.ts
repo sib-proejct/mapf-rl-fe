@@ -29,6 +29,7 @@ export interface AuthoritativeSnapshot {
   map: RasterMap;
   robots: Robot[];
   orders: Order[];
+  queueTasks?: import("../../contracts/queue.generated.ts").QueueTask[];
   incidents: Incident[];
   batteryPolicy?: import("../../contracts/battery.generated.ts").BatteryPolicy;
 }

@@ -305,8 +305,8 @@ export const translations = {
     orderPriorityCritical: "긴급 (Critical)",
     orderNotes: "운영 메모",
     orderNotesPlaceholder: "작업 관련 특이사항이나 전달 메시지를 입력하세요...",
-    orderCreateSubmit: "배정 작업 제출",
-    orderCreating: "UUIDv4 requestId 발급 및 제출 중...",
+    orderCreateSubmit: "큐에 작업 등록",
+    orderCreating: "작업 등록 중...",
     orderCreatedSuccess: "작업이 성공적으로 제출되었습니다.",
     orderCreateNotice:
       "클라이언트에서 생성된 고유 UUIDv4 requestId로 멱등 제출되며, 중복 클릭이 방지됩니다.",
@@ -679,8 +679,8 @@ export const translations = {
     orderPriorityCritical: "Critical",
     orderNotes: "Operator Notes",
     orderNotesPlaceholder: "Add optional instructions or context...",
-    orderCreateSubmit: "Dispatch Order",
-    orderCreating: "Submitting with UUIDv4 requestId...",
+    orderCreateSubmit: "Queue Order",
+    orderCreating: "Queuing order...",
     orderCreatedSuccess: "Order dispatched successfully.",
     orderCreateNotice:
       "Submitted with client UUIDv4 requestId for idempotent delivery; double-clicks are prevented.",

@@ -1,3 +1,5 @@
+import { QueueTaskList } from "./QueueTaskList.tsx";
+import { TransportWaveForm } from "./TransportWaveForm.tsx";
 import React from "react";
 import { OrderCreateForm } from "./OrderCreateForm.tsx";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
@@ -175,6 +177,8 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
           </div>
         )}
         <OrderCreateForm />
+        <TransportWaveForm />
+        <QueueTaskList />
         {orders.length === 0 ? (
           <div className="py-12 text-center text-xs text-[#86868B] space-y-3">
             <p className="font-medium">{t("orderNoOrders")}</p>

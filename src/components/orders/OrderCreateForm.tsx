@@ -1,4 +1,3 @@
-import { isLowBattery } from "../../utils/battery.ts";
 import React, { useRef, useState } from "react";
 import { X, Plus, RefreshCw } from "lucide-react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
@@ -28,25 +27,7 @@ export const OrderCreateForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const map = snapshot?.map;
   const robots = snapshot?.robots ?? [];
-  const availableRobots = robots.filter(
-    (robot) =>
-      (arrivalAction === "CHARGE" ||
-        !isLowBattery(robot, snapshot?.batteryPolicy)) &&
-      (!arrivalAction || robot.stationActionsVersion === "1.1.0") &&
-      (arrivalAction !== "PICK" || robot.stationState?.loaded === false) &&
-      (arrivalAction !== "PLACE" || robot.stationState?.loaded === true) &&
-      robot.operationalState === "IDLE" &&
-      robot.connectivity === "CONNECTED" &&
-      robot.safety === "NORMAL" &&
-      robot.freshness === "CURRENT" &&
-      !snapshot?.orders.some(
-        (order) =>
-          !["Completed", "Cancelled", "Rejected"].includes(order.state) &&
-          order.assignments.some(
-            (assignment) => assignment.robotId === robot.id,
-          ),
-      ),
-  );
+  const availableRobots = robots;
   const assignedRobot =
     robotId === "auto"
       ? transportMode !== "FIXTURE_STREAM"
@@ -72,8 +53,8 @@ export const OrderCreateForm: React.FC = () => {
         if (!map || !assignedRobot)
           throw new Error(
             ko
-              ? "맵과 연결된 유휴 로봇이 필요합니다."
-              : "A map and a connected idle robot are required.",
+              ? "맵과 로봇 선택이 필요합니다."
+              : "A map and robot selection are required.",
           );
         const column = Number(goalColumn);
         const row = Number(goalRow);
@@ -236,9 +217,7 @@ export const OrderCreateForm: React.FC = () => {
             className={inputClass}
           >
             <option value="auto" disabled={transportMode === "FIXTURE_STREAM"}>
-              {ko
-                ? "거리 기반 자동 할당 · Live"
-                : "Nearest available robot · Live"}
+              {ko ? "가용 시 자동 할당 · Live" : "Assign when available · Live"}
             </option>
             {robots.map((robot) => (
               <option

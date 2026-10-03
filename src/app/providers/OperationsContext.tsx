@@ -1,4 +1,3 @@
-import { isLowBattery } from "../../utils/battery.ts";
 import { isNodeCommandTransportReady } from "../../domain/order/nodeCommand.ts";
 import React, {
   createContext,
@@ -36,7 +35,11 @@ import {
   normalizeProblem,
 } from "../../contracts/adapters/problem.ts";
 import { adaptOperationsSnapshot } from "../../contracts/adapters/snapshotAdapter.ts";
-import { defaultApiClient, ProblemError } from "../../services/api/client.ts";
+import {
+  defaultApiClient,
+  ProblemError,
+  queueOrderInput,
+} from "../../services/api/client.ts";
 import {
   CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
   CANONICAL_STALE_SNAPSHOT_FIXTURE,
@@ -142,6 +145,7 @@ export interface OperationsContextType {
     req: CreateOrderInput,
     options?: { timeoutMs?: number },
   ) => Promise<PendingMutation>;
+  cancelQueueTask: (taskId: string) => Promise<PendingMutation>;
   cancelOrder: (
     req: CancelOrderRequest,
     options?: { timeoutMs?: number },
@@ -557,7 +561,9 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       const mut = globalMutationManager.startMutation(
         "CREATE_ORDER",
-        req as unknown as Record<string, unknown>,
+        (transportMode === "FIXTURE_STREAM"
+          ? req
+          : queueOrderInput(req)) as unknown as Record<string, unknown>,
         undefined,
         undefined,
         options?.forcedRequestId,
@@ -606,7 +612,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // Live REST execution
       try {
-        const outcome = await defaultApiClient.createOrder(req, {
+        const outcome = await defaultApiClient.enqueueOrder(req, {
           requestId: mut.requestId,
           timeoutMs: options?.timeoutMs || 8000,
         });
@@ -688,6 +694,50 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       return globalMutationManager.get(mut.requestId)!;
     },
     [transportMode, loadSnapshot],
+  );
+
+  const cancelQueueTask = useCallback(
+    async (
+      taskId: string,
+      options?: { forcedRequestId?: string },
+    ): Promise<PendingMutation> => {
+      const existing = globalMutationManager
+        .getAll()
+        .find(
+          (mutation) =>
+            mutation.operation === "CANCEL_QUEUE_TASK" &&
+            mutation.targetEntityId === taskId &&
+            ["submitting", "uncertain"].includes(mutation.state),
+        );
+      if (existing?.state === "submitting") return existing;
+      const mut = globalMutationManager.startMutation(
+        "CANCEL_QUEUE_TASK",
+        { taskId },
+        taskId,
+        undefined,
+        options?.forcedRequestId ?? existing?.requestId,
+      );
+      try {
+        const outcome = await defaultApiClient.cancelQueueTask(taskId, {
+          requestId: mut.requestId,
+          timeoutMs: 8000,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, outcome);
+        await loadSnapshot();
+      } catch (err) {
+        if (
+          err instanceof ProblemError &&
+          err.problem.code === "MUTATION_TIMEOUT_UNCERTAIN"
+        )
+          globalMutationManager.markUncertain(
+            mut.requestId,
+            err.problem.detail,
+          );
+        else globalMutationManager.rejectMutation(mut.requestId, err);
+      }
+      return globalMutationManager.get(mut.requestId)!;
+    },
+    [loadSnapshot],
   );
 
   const reassignOrder = useCallback(
@@ -918,6 +968,10 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         return createOrder(existing.payload as unknown as CreateOrderInput, {
           forcedRequestId: requestId,
         });
+      } else if (existing.operation === "CANCEL_QUEUE_TASK") {
+        return cancelQueueTask(String(existing.payload.taskId), {
+          forcedRequestId: requestId,
+        });
       } else if (existing.operation === "CANCEL_ORDER") {
         return cancelOrder(existing.payload as unknown as CancelOrderRequest, {
           forcedRequestId: requestId,
@@ -939,7 +993,13 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       return existing;
     },
-    [createOrder, cancelOrder, reassignOrder, sendInstantAction],
+    [
+      createOrder,
+      cancelOrder,
+      cancelQueueTask,
+      reassignOrder,
+      sendInstantAction,
+    ],
   );
 
   const dismissMutation = useCallback((requestId: string) => {
@@ -1075,29 +1135,13 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
     if (
-      robot.connectivity !== "CONNECTED" ||
-      robot.operationalState !== "IDLE" ||
-      robot.safety !== "NORMAL" ||
-      robot.freshness !== "CURRENT" ||
       !isNodeCommandTransportReady(
         transportMode,
         reconState.connectionState,
         wsClientRef.current?.isConnected ?? false,
       )
     ) {
-      reject("연결된 안전 상태의 유휴 로봇만 이동할 수 있습니다.");
-      return;
-    }
-    if (
-      visibleSnapshot?.orders.some(
-        (order) =>
-          !["Completed", "Cancelled", "Rejected"].includes(order.state) &&
-          order.assignments.some(
-            (assignment) => assignment.robotId === robot.id,
-          ),
-      )
-    ) {
-      reject("이 로봇은 이미 작업 중입니다.");
+      reject("Core 연결을 확인한 뒤 큐에 등록하세요.");
       return;
     }
     if (!node.isTraversable) {
@@ -1124,33 +1168,6 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
           : station?.type === "charger"
             ? ("CHARGE" as const)
             : undefined;
-    if (
-      isLowBattery(robot, visibleSnapshot?.batteryPolicy) &&
-      arrivalAction !== "CHARGE"
-    ) {
-      reject("배터리가 부족합니다. 충전소를 선택하세요.");
-      return;
-    }
-    if (
-      visibleSnapshot?.batteryPolicy &&
-      (robot.batteryPercent ?? 100) <=
-        visibleSnapshot.batteryPolicy.depletedPercent
-    ) {
-      reject("배터리가 고갈되었습니다. 운영자 복구가 필요합니다.");
-      return;
-    }
-    if (arrivalAction && robot.stationActionsVersion !== "1.1.0") {
-      reject("이 로봇은 적재·하역·충전 작업을 지원하지 않습니다.");
-      return;
-    }
-    if (arrivalAction === "PICK" && robot.stationState?.loaded !== false) {
-      reject("빈 로봇만 pick 작업을 할 수 있습니다.");
-      return;
-    }
-    if (arrivalAction === "PLACE" && robot.stationState?.loaded !== true) {
-      reject("적재된 로봇만 place 작업을 할 수 있습니다.");
-      return;
-    }
     nodeSubmitting.current = true;
     setNodeCommand({ ...status, state: "submitting" });
     try {
@@ -1281,6 +1298,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         pendingMutations,
         createOrder,
         cancelOrder,
+        cancelQueueTask,
         reassignOrder,
         sendInstantAction,
         acknowledgeIncident,

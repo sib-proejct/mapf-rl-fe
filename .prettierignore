@@ -6,3 +6,5 @@ src/contracts/generated.ts
 src/contracts/contracts.lock.json
 
 src/contracts/provisioning.generated.ts
+
+src/contracts/queue.generated.ts

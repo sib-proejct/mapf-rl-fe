@@ -193,6 +193,21 @@ export class MutationManager {
       if (mut.state !== "uncertain" && mut.state !== "submitting") continue;
 
       if (mut.operation === "CREATE_ORDER") {
+        const queued = snapshot.queueTasks?.find(
+          (task) => task.requestId === requestId,
+        );
+        if (queued) {
+          mut.state = "confirmed";
+          mut.outcome = {
+            status: "CONFIRMED",
+            entityId: queued.waveId ?? queued.taskId,
+            entityVersion: queued.entityVersion,
+          };
+          mut.error = undefined;
+          this.inFlightDigests.delete(mut.payloadDigest);
+          changed = true;
+          continue;
+        }
         const payload = mut.payload as unknown as CreateOrderRequest;
         // Check if an order with matching assignments exists
         const matched = snapshot.orders.find((o) => {
@@ -220,6 +235,21 @@ export class MutationManager {
             entityId: matched.id,
             entityVersion: matched.entityVersion,
             orderUpdateId: matched.orderUpdateId,
+          };
+          mut.error = undefined;
+          this.inFlightDigests.delete(mut.payloadDigest);
+          changed = true;
+        }
+      } else if (mut.operation === "CANCEL_QUEUE_TASK") {
+        const task = snapshot.queueTasks?.find(
+          (task) => task.taskId === mut.targetEntityId,
+        );
+        if (task && ["Cancelling", "Cancelled"].includes(task.state)) {
+          mut.state = "confirmed";
+          mut.outcome = {
+            status: "CONFIRMED",
+            entityId: task.taskId,
+            entityVersion: task.entityVersion,
           };
           mut.error = undefined;
           this.inFlightDigests.delete(mut.payloadDigest);

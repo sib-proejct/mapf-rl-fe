@@ -1,3 +1,4 @@
+import { adaptQueueTask } from "../../contracts/adapters/queueAdapter.ts";
 /** Pure reconciliation state machine for the canonical Core operations stream. */
 
 import type { AuthoritativeSnapshot } from "../../domain/snapshot/types.ts";
@@ -243,6 +244,22 @@ function applyOperation(
     next = { ...next, map };
   } else if (operation.entityType === "ROBOT") {
     next = applyRobot(next, event, operation);
+  } else if (operation.entityType === "QUEUE_TASK") {
+    const task = adaptQueueTask(operation.data);
+    if (
+      task.taskId !== operation.entityId ||
+      task.entityVersion !== operation.entityVersion
+    )
+      throw new Error("Queue task envelope mismatch");
+    next = {
+      ...next,
+      queueTasks: [
+        ...(next.queueTasks ?? []).filter(
+          (item) => item.taskId !== task.taskId,
+        ),
+        task,
+      ].sort((a, b) => a.sequence - b.sequence),
+    };
   } else if (operation.entityType === "ORDER") {
     next = applyOrder(next, event, operation);
   } else if (operation.entityType === "CONNECTIVITY") {

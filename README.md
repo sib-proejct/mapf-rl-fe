@@ -82,3 +82,12 @@ snapshot을 갱신하고 새 로봇을 선택한다. 응답 유실에는 같은 
 ### 거리 기반 자동 배차
 
 Live `POST /api/v1/orders/auto-assign` (`auto-assignment 1.0.0`)은 가용 로봇의 Manhattan 거리 상위 최대 5대 중 A\* 경로 길이가 가장 짧은 로봇을 선택한다. 이동·PICK·PLACE·CHARGE를 지원하며 확정 robotId와 Order 결과를 반환한다. 같은 requestId로 재시도하고, 후보가 모두 도달 불가능하면 NO_ASSIGNABLE_ROBOT으로 실패한다. 선택된 작업은 기존 MAPF 예약을 거친다. Core → FE 순으로 적용하며 DB migration은 없다.
+
+### 오더 큐와 운반 웨이브
+
+Live 새 오더와 맵 노드 명령은 Core 큐에 등록한다. 로봇이 바쁘거나 연결이 끊겨 있어도 지정
+작업을 등록할 수 있고, Core가 실행 직전에 가용성과 안전 상태를 검증한다. 오더 탭의
+`운반 작업 / 웨이브`에서 PICK·PLACE station과 자동/지정 로봇을 선택한다. 행 하나는 운반 작업,
+여러 행은 최대 100개 작업의 웨이브로 제출한다. 큐 상세에서 대기 사유, 단계, 실행 오더와
+웨이브 완료·취소·보류 수를 확인할 수 있다. 화물이 남아 보류되면 같은 로봇의 PLACE 작업으로
+복구한다. 불확실한 제출은 같은 requestId로 재시도한다. Fixture 모드에는 운반 웨이브를 제공하지 않는다.

@@ -6,6 +6,7 @@ import type { NormalizedProblem } from "../../contracts/adapters/problem.ts";
 
 export type MutationOperation =
   | "CREATE_ORDER"
+  | "CANCEL_QUEUE_TASK"
   | "CANCEL_ORDER"
   | "REASSIGN_ORDER"
   | "INSTANT_ACTION"
@@ -34,6 +35,14 @@ export interface CreateOrderRequest {
 }
 
 export type CreateOrderInput =
+  | Omit<
+      import("../../contracts/queue.generated.ts").CreateQueueTaskRequest,
+      "requestId"
+    >
+  | Omit<
+      import("../../contracts/queue.generated.ts").CreateWaveRequest,
+      "requestId"
+    >
   | Omit<CreateOrderRequest, "requestId">
   | Omit<
       import("../../contracts/auto-assignment.generated.ts").AutoAssignOrderRequest,

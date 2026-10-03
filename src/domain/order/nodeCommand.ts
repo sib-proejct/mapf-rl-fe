@@ -1,5 +1,5 @@
 // Aggregate snapshot connectivity may include retired simulators. The caller must
-// still require CURRENT, CONNECTED, IDLE and NORMAL on the selected robot.
+// queue submission requires Core connectivity; Core checks robot readiness at dispatch.
 export function isNodeCommandTransportReady(
   mode: string,
   state: string,
