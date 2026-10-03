@@ -2,6 +2,22 @@ export type Language = "ko" | "en";
 
 export const translations = {
   ko: {
+    robotAdd: "로봇 추가",
+    robotAddColumn: "시작 열 (column)",
+    robotAddRow: "시작 행 (row)",
+    robotAddSelect: "좌표를 입력하거나 지도에서 시작 셀을 선택하세요.",
+    robotAddUnavailable: "Live runtime 연결 후 로봇을 추가할 수 있습니다.",
+    robotAddInvalid: "지도 안의 통행 가능한 셀을 선택하세요.",
+    robotAddSubmit: "추가 및 연결",
+    robotAddPending: "로봇을 등록했습니다. 연결을 기다리고 있습니다.",
+    robotAddReady: "로봇이 연결되었습니다.",
+    robotAddFailed: "로봇 실행에 실패했습니다.",
+    robotAddUncertain:
+      "응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.",
+    robotAddRetry: "다시 시도",
+    robotAddClose: "닫기",
+    robotAddPollError:
+      "연결 상태를 조회하지 못했습니다. 자동으로 다시 조회합니다.",
     // Navigation
     navOperations: "운영 (Operations)",
     navOrders: "작업 (Orders)",
@@ -364,6 +380,20 @@ export const translations = {
     footerDocs: "설계 문서",
   },
   en: {
+    robotAdd: "Add robot",
+    robotAddColumn: "Start column",
+    robotAddRow: "Start row",
+    robotAddSelect: "Enter coordinates or select a start cell on the map.",
+    robotAddUnavailable: "Connect the Live runtime to add robots.",
+    robotAddInvalid: "Select a traversable cell within the map.",
+    robotAddSubmit: "Add and connect",
+    robotAddPending: "Robot registered. Waiting for connection.",
+    robotAddReady: "Robot connected.",
+    robotAddFailed: "Robot failed to start.",
+    robotAddUncertain: "Response unconfirmed. Retry with the same request.",
+    robotAddRetry: "Retry",
+    robotAddClose: "Close",
+    robotAddPollError: "Unable to check connection. Retrying automatically.",
     // Navigation
     navOperations: "Operations",
     navOrders: "Orders",

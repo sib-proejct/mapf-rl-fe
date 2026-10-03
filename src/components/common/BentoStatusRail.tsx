@@ -353,7 +353,7 @@ export const BentoStatusRail: React.FC = () => {
                                   </div>
                                   <p className="text-[10px] opacity-80 mt-0.5 truncate">
                                     {r.operationalState} · 배터리{" "}
-                                    {r.batteryPercent}%
+                                    {r.batteryPercent?.toFixed(1) ?? "—"}%
                                   </p>
                                 </div>
                               </div>

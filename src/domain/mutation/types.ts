@@ -33,7 +33,12 @@ export interface CreateOrderRequest {
   assignments: CreateOrderAssignmentInput[];
 }
 
-export type CreateOrderInput = Omit<CreateOrderRequest, "requestId">;
+export type CreateOrderInput =
+  | Omit<CreateOrderRequest, "requestId">
+  | Omit<
+      import("../../contracts/auto-assignment.generated.ts").AutoAssignOrderRequest,
+      "requestId"
+    >;
 
 export type CancelOrderRequest = Omit<
   import("../../contracts/generated.ts").CancelOrderCommand,

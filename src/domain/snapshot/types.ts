@@ -30,4 +30,5 @@ export interface AuthoritativeSnapshot {
   robots: Robot[];
   orders: Order[];
   incidents: Incident[];
+  batteryPolicy?: import("../../contracts/battery.generated.ts").BatteryPolicy;
 }

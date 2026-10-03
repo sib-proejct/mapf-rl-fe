@@ -1465,7 +1465,10 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                       </span>
                       <span className="text-[9px] text-[#86868B] font-sans">
                         Battery:{" "}
-                        {selectedNodeDetails.occupyingRobot.batteryPercent}%
+                        {selectedNodeDetails.occupyingRobot.batteryPercent?.toFixed(
+                          1,
+                        ) ?? "—"}
+                        %
                       </span>
                     </div>
                   </div>

@@ -1,13 +1,27 @@
+import type { CreateOrderInput } from "../../domain/mutation/types.ts";
 import { normalizeProblem } from "../../contracts/adapters/problem.ts";
 import type { NormalizedProblem } from "../../contracts/adapters/problem.ts";
 import type {
-  CreateOrderRequest,
   CancelOrderRequest,
   ReassignOrderRequest,
   InstantActionRequest,
   IncidentActionRequest,
   MutationOutcome,
 } from "../../domain/mutation/types.ts";
+
+import type {
+  CreateRobotRequest,
+  RetryRobotRequest,
+  ProvisioningOutcome,
+  ProvisioningCapabilities,
+  RemoveRobotRequest,
+  RobotRemovalOutcome,
+} from "../../contracts/provisioning.generated.ts";
+import {
+  adaptProvisioningOutcome,
+  adaptProvisioningCapabilities,
+  adaptRobotRemovalOutcome,
+} from "../../contracts/adapters/provisioning.ts";
 
 export class ProblemError extends Error {
   readonly problem: NormalizedProblem;
@@ -73,7 +87,14 @@ export class CoreApiClient {
   async fetchOperationsSnapshot(
     options: FetchSnapshotOptions = {},
   ): Promise<unknown> {
-    const url = `${this.baseUrl}/api/v1/operations/snapshot`;
+    return this.getJson("/api/v1/operations/snapshot", options);
+  }
+
+  private async getJson(
+    path: string,
+    options: FetchSnapshotOptions = {},
+  ): Promise<unknown> {
+    const url = `${this.baseUrl}${path}`;
     const headers: Record<string, string> = {
       Accept: "application/json, application/problem+json",
     };
@@ -115,16 +136,89 @@ export class CoreApiClient {
     }
   }
 
+  async robotProvisioningCapabilities(
+    options: FetchSnapshotOptions = {},
+  ): Promise<ProvisioningCapabilities> {
+    return adaptProvisioningCapabilities(
+      await this.getJson("/api/v1/robot-provisioning/capabilities", options),
+    );
+  }
+
+  async createRobot(command: CreateRobotRequest): Promise<ProvisioningOutcome> {
+    const outcome = await this.postMutation(
+      `${this.baseUrl}/api/v1/robots`,
+      command,
+      { requestId: command.requestId, timeoutMs: 5000 },
+    );
+    return adaptProvisioningOutcome(outcome.data);
+  }
+
+  async robotProvisioning(
+    robotId: string,
+    options: FetchSnapshotOptions = {},
+  ): Promise<ProvisioningOutcome> {
+    return adaptProvisioningOutcome(
+      await this.getJson(
+        `/api/v1/robots/${encodeURIComponent(robotId)}/provisioning`,
+        options,
+      ),
+    );
+  }
+
+  async retryRobotProvisioning(
+    robotId: string,
+    command: RetryRobotRequest,
+  ): Promise<ProvisioningOutcome> {
+    const outcome = await this.postMutation(
+      `${this.baseUrl}/api/v1/robots/${encodeURIComponent(robotId)}/provisioning/retry`,
+      command,
+      { requestId: command.requestId, timeoutMs: 5000 },
+    );
+    return adaptProvisioningOutcome(outcome.data);
+  }
+
+  async removeRobot(
+    robotId: string,
+    command: RemoveRobotRequest,
+  ): Promise<RobotRemovalOutcome> {
+    const outcome = await this.postMutation(
+      `${this.baseUrl}/api/v1/robots/${encodeURIComponent(robotId)}/remove`,
+      command,
+      { requestId: command.requestId, timeoutMs: 5000 },
+    );
+    return adaptRobotRemovalOutcome(outcome.data);
+  }
+
+  async robotRemovalCapabilities(
+    options: FetchSnapshotOptions = {},
+  ): Promise<ProvisioningCapabilities> {
+    return adaptProvisioningCapabilities(
+      await this.getJson("/api/v1/robot-removal/capabilities", options),
+    );
+  }
+
+  async robotRemoval(
+    robotId: string,
+    options: FetchSnapshotOptions = {},
+  ): Promise<RobotRemovalOutcome> {
+    return adaptRobotRemovalOutcome(
+      await this.getJson(
+        `/api/v1/robots/${encodeURIComponent(robotId)}/removal`,
+        options,
+      ),
+    );
+  }
+
   /**
    * Submits a new dispatch order intent with UUIDv4 requestId.
    */
   async createOrder(
-    payload: Omit<CreateOrderRequest, "requestId">,
+    payload: CreateOrderInput,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
     return this.postMutation(
-      `${this.baseUrl}/api/v1/orders`,
-      { ...payload, requestId: options.requestId } satisfies CreateOrderRequest,
+      `${this.baseUrl}/api/v1/orders${"assignments" in payload ? "" : "/auto-assign"}`,
+      { ...payload, requestId: options.requestId },
       options,
     );
   }

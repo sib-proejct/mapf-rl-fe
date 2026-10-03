@@ -1,3 +1,4 @@
+import { adaptBatteryPolicy } from "../../utils/battery.ts";
 import { adaptArrivalAction, adaptStationState } from "./stationAdapter.ts";
 import type {
   AuthoritativeSnapshot,
@@ -506,6 +507,7 @@ export function adaptOperationsSnapshot(
   return {
     contractVersion: "1.0.0",
     snapshotAt,
+    batteryPolicy: adaptBatteryPolicy(obj.batteryPolicy),
     cursor: {
       streamId,
       eventSequence,

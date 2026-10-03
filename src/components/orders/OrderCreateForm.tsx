@@ -1,13 +1,16 @@
+import { isLowBattery } from "../../utils/battery.ts";
 import React, { useRef, useState } from "react";
 import { X, Plus, RefreshCw } from "lucide-react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
+import type { StationAction } from "../../contracts/generated.ts";
 import type { PendingMutation } from "../../domain/mutation/types.ts";
 
 export const OrderCreateForm: React.FC = () => {
   const { t, language } = useAppConfig();
   const {
     snapshot,
+    transportMode,
     isOrderModalOpen,
     setIsOrderModalOpen,
     createOrder,
@@ -15,6 +18,7 @@ export const OrderCreateForm: React.FC = () => {
   } = useOperations();
   const [goalColumn, setGoalColumn] = useState("14");
   const [goalRow, setGoalRow] = useState("8");
+  const [arrivalAction, setArrivalAction] = useState<"" | StationAction>("");
   const [robotId, setRobotId] = useState("auto");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitting = useRef(false);
@@ -26,6 +30,11 @@ export const OrderCreateForm: React.FC = () => {
   const robots = snapshot?.robots ?? [];
   const availableRobots = robots.filter(
     (robot) =>
+      (arrivalAction === "CHARGE" ||
+        !isLowBattery(robot, snapshot?.batteryPolicy)) &&
+      (!arrivalAction || robot.stationActionsVersion === "1.1.0") &&
+      (arrivalAction !== "PICK" || robot.stationState?.loaded === false) &&
+      (arrivalAction !== "PLACE" || robot.stationState?.loaded === true) &&
       robot.operationalState === "IDLE" &&
       robot.connectivity === "CONNECTED" &&
       robot.safety === "NORMAL" &&
@@ -40,7 +49,9 @@ export const OrderCreateForm: React.FC = () => {
   );
   const assignedRobot =
     robotId === "auto"
-      ? availableRobots[0]?.id
+      ? transportMode !== "FIXTURE_STREAM"
+        ? "auto"
+        : undefined
       : availableRobots.find((robot) => robot.id === robotId)?.id;
   const uncertain = lastMutation?.state === "uncertain";
   const ko = language === "ko";
@@ -89,13 +100,43 @@ export const OrderCreateForm: React.FC = () => {
               : "Obstacle nodes cannot be destinations.",
           );
         }
-        mutation = await createOrder({
-          mapId: map.mapId,
-          mapRevision: map.revision,
-          assignments: [
-            { robotId: assignedRobot, goalColumn: column, goalRow: row },
-          ],
-        });
+        if (arrivalAction) {
+          const kind = { PICK: "pick", PLACE: "place", CHARGE: "charger" }[
+            arrivalAction
+          ];
+          if (
+            !map.stationCatalog?.some(
+              (node) =>
+                node.column === column &&
+                node.row === row &&
+                node.type === kind,
+            )
+          ) {
+            throw new Error(
+              ko
+                ? "작업 종류에 맞는 station 좌표를 선택하세요."
+                : "Choose a station matching the action.",
+            );
+          }
+        }
+        const goal = {
+          goalColumn: column,
+          goalRow: row,
+          ...(arrivalAction ? { arrivalAction } : {}),
+        };
+        mutation = await createOrder(
+          robotId === "auto"
+            ? {
+                mapId: map.mapId,
+                mapRevision: map.revision,
+                ...goal,
+              }
+            : {
+                mapId: map.mapId,
+                mapRevision: map.revision,
+                assignments: [{ robotId: assignedRobot, ...goal }],
+              },
+        );
       }
       setLastMutation(mutation);
       if (mutation.state === "confirmed") {
@@ -173,16 +214,31 @@ export const OrderCreateForm: React.FC = () => {
           </label>
         </div>
         <label className="block text-[11px] text-[#86868B]">
+          {ko ? "작업 종류" : "Action"}
+          <select
+            value={arrivalAction}
+            onChange={(event) =>
+              setArrivalAction(event.target.value as typeof arrivalAction)
+            }
+            className={inputClass}
+          >
+            <option value="">{ko ? "이동" : "Move"}</option>
+            <option value="PICK">{ko ? "적재" : "Pick"}</option>
+            <option value="PLACE">{ko ? "하역" : "Place"}</option>
+            <option value="CHARGE">{ko ? "충전" : "Charge"}</option>
+          </select>
+        </label>
+        <label className="block text-[11px] text-[#86868B]">
           {t("orderSelectRobot")}
           <select
             value={robotId}
             onChange={(event) => setRobotId(event.target.value)}
             className={inputClass}
           >
-            <option value="auto">
+            <option value="auto" disabled={transportMode === "FIXTURE_STREAM"}>
               {ko
-                ? "자동 선택 · 연결된 유휴 로봇"
-                : "Auto · connected idle robot"}
+                ? "거리 기반 자동 할당 · Live"
+                : "Nearest available robot · Live"}
             </option>
             {robots.map((robot) => (
               <option
@@ -210,7 +266,7 @@ export const OrderCreateForm: React.FC = () => {
               ? "맵을 불러온 뒤 제출할 수 있습니다."
               : "Load the map before submitting."
             : ko
-              ? "연결된 유휴 로봇이 없습니다."
+              ? "가용 로봇을 선택하세요. 자동 할당은 Live에서 지원합니다."
               : "No connected idle robot is available."}
         </p>
       )}

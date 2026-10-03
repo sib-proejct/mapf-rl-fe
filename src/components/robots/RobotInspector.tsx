@@ -1,3 +1,5 @@
+import { batteryLabel } from "../../utils/battery.ts";
+import { RobotRemoveButton } from "./RobotRemoveButton.tsx";
 import React, { useState, useEffect } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
@@ -268,8 +270,8 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
                       Occupant: {occupyingRobot.id}
                     </span>
                     <span className="text-[10px] text-[#86868B]">
-                      Battery {occupyingRobot.batteryPercent}% ·{" "}
-                      {occupyingRobot.operationalState}
+                      Battery {occupyingRobot.batteryPercent?.toFixed(1) ?? "—"}
+                      % · {occupyingRobot.operationalState}
                     </span>
                   </div>
                 </div>
@@ -458,6 +460,7 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
       }
     >
       {/* 1. Header: Robot ID & Actions */}
+      <RobotRemoveButton key={selectedRobot.id} robotId={selectedRobot.id} />
       <div className="flex items-center justify-between border-b border-black/[0.04] dark:border-white/[0.06] pb-3 shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-[#0071E3]/15 text-[#0071E3] dark:text-[#2997FF] flex items-center justify-center">
@@ -576,6 +579,11 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
             {selectedRobot.stationState.loaded ? "적재됨" : "빈 로봇"} ·{" "}
             {selectedRobot.stationState.batteryPercent.toFixed(1)}%
           </p>
+          {batteryLabel(selectedRobot, orders, snapshot?.batteryPolicy) && (
+            <p>
+              {batteryLabel(selectedRobot, orders, snapshot?.batteryPolicy)}
+            </p>
+          )}
           {selectedRobot.stationState.action && (
             <p>
               {selectedRobot.stationState.action} ·{" "}

@@ -1,3 +1,5 @@
+import { batteryLabel } from "../../utils/battery.ts";
+import { RobotCreateForm } from "./RobotCreateForm.tsx";
 import React, { useState, useMemo, useEffect, useRef, memo } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
@@ -46,6 +48,7 @@ import {
 import { formatShortId, copyToClipboard } from "../../utils/ids/ids.ts";
 import { getNodeTypeUiMeta } from "../../utils/map/topology.ts";
 import type { Robot } from "../../domain/robot/types.ts";
+import { RobotRemoveButton } from "./RobotRemoveButton.tsx";
 
 export interface RobotListProps {
   embedded?: boolean;
@@ -104,6 +107,7 @@ const InlineRobotInspector: React.FC<InlineRobotInspectorProps> = ({
       className="mt-3 pt-3 border-t border-black/[0.06] dark:border-white/[0.08] space-y-2.5 animate-fade-in text-left text-xs"
     >
       {/* 1. Real-time Telemetry Bento */}
+      <RobotRemoveButton key={robot.id} robotId={robot.id} />
       <div className="grid grid-cols-2 gap-2">
         {/* Battery */}
         <div className="bg-[#F5F5F7] dark:bg-[#252528] p-2.5 rounded-xl border border-black/[0.02] dark:border-white/[0.03]">
@@ -113,7 +117,7 @@ const InlineRobotInspector: React.FC<InlineRobotInspectorProps> = ({
               Battery
             </span>
             <span className="font-mono font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
-              {robot.batteryPercent ?? 100}%
+              {robot.batteryPercent?.toFixed(1) ?? "—"}%
             </span>
           </div>
           <div className="w-full h-1.5 bg-black/5 dark:bg-white/10 rounded-full overflow-hidden">
@@ -125,7 +129,7 @@ const InlineRobotInspector: React.FC<InlineRobotInspectorProps> = ({
                     ? "bg-[#FF9500] dark:bg-[#FF9F0A]"
                     : "bg-[#FF3B30] dark:bg-[#FF453A]"
               }`}
-              style={{ width: `${robot.batteryPercent ?? 100}%` }}
+              style={{ width: `${robot.batteryPercent ?? 0}%` }}
             />
           </div>
         </div>
@@ -252,7 +256,22 @@ interface RobotCardProps {
 
 const RobotCard = memo<RobotCardProps>(
   ({ robot, isSelected, onSelect, onCloseInspector }) => {
+    const { snapshot } = useOperations();
+    const { language } = useAppConfig();
     const getStatusBadge = (r: Robot) => {
+      const label = batteryLabel(
+        r,
+        snapshot?.orders ?? [],
+        snapshot?.batteryPolicy,
+        language,
+      );
+      if (label)
+        return {
+          label,
+          dot: "bg-[#FF9500] dark:bg-[#FF9F0A]",
+          text: "text-[#C93400] dark:text-[#FF9F0A]",
+          bg: "bg-[#FF9500]/10 dark:bg-[#FF9F0A]/15 border-[#FF9500]/20",
+        };
       if (r.connectivity === "DISCONNECTED") {
         return {
           label: "Offline",
@@ -531,6 +550,8 @@ export const RobotList: React.FC<RobotListProps> = ({ embedded = false }) => {
           </div>
         </div>
       )}
+
+      <RobotCreateForm />
 
       {/* Search Input with Apple Pill Design */}
       <div className="relative mb-2.5 shrink-0">

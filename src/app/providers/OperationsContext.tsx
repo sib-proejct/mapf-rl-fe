@@ -1,3 +1,4 @@
+import { isLowBattery } from "../../utils/battery.ts";
 import { isNodeCommandTransportReady } from "../../domain/order/nodeCommand.ts";
 import React, {
   createContext,
@@ -551,6 +552,9 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       ) {
         throw new Error("기존 주문의 응답을 먼저 확인하세요.");
       }
+      if (transportMode === "FIXTURE_STREAM" && !("assignments" in req)) {
+        throw new Error("자동 배차는 Live에서 사용할 수 있습니다.");
+      }
       const mut = globalMutationManager.startMutation(
         "CREATE_ORDER",
         req as unknown as Record<string, unknown>,
@@ -559,7 +563,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         options?.forcedRequestId,
       );
 
-      if (transportMode === "FIXTURE_STREAM") {
+      if (transportMode === "FIXTURE_STREAM" && "assignments" in req) {
         const orderId = `order-${Date.now().toString().slice(-4)}`;
         const nowIso = new Date().toISOString();
         const newOrder: Order = {
@@ -1120,6 +1124,21 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
           : station?.type === "charger"
             ? ("CHARGE" as const)
             : undefined;
+    if (
+      isLowBattery(robot, visibleSnapshot?.batteryPolicy) &&
+      arrivalAction !== "CHARGE"
+    ) {
+      reject("배터리가 부족합니다. 충전소를 선택하세요.");
+      return;
+    }
+    if (
+      visibleSnapshot?.batteryPolicy &&
+      (robot.batteryPercent ?? 100) <=
+        visibleSnapshot.batteryPolicy.depletedPercent
+    ) {
+      reject("배터리가 고갈되었습니다. 운영자 복구가 필요합니다.");
+      return;
+    }
     if (arrivalAction && robot.stationActionsVersion !== "1.1.0") {
       reject("이 로봇은 적재·하역·충전 작업을 지원하지 않습니다.");
       return;

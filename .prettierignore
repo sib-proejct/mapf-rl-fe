@@ -4,3 +4,5 @@ docs
 AGENTS.md
 src/contracts/generated.ts
 src/contracts/contracts.lock.json
+
+src/contracts/provisioning.generated.ts
