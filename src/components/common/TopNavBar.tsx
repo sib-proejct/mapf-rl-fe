@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Layers,
   Database,
-  Activity,
   Box,
   FileText,
   ShieldAlert,
@@ -148,10 +147,12 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
         {/* Left: Brand Identity & Product Logo */}
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2.5 select-none">
-            {/* Apple-style Gradient App Icon */}
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#0071E3] to-[#409CFF] dark:from-[#2997FF] dark:to-[#0062C4] shadow-sm flex items-center justify-center text-white">
-              <Activity className="w-4.5 h-4.5 stroke-[2.2]" />
-            </div>
+            {/* Boston Dynamics Atlas Mascot App Icon */}
+            <img
+              src="/favicon.svg"
+              alt="Boston Dynamics Atlas Mascot"
+              className="w-8 h-8 rounded-xl shadow-sm select-none"
+            />
 
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5 leading-none">
