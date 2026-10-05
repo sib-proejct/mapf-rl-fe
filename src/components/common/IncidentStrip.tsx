@@ -11,15 +11,49 @@ import {
 } from "lucide-react";
 import { formatStateAge } from "../../utils/time/time.ts";
 
+import { STORAGE_KEY_CLEARED_INCIDENTS } from "../incidents/IncidentCenter.tsx";
+
 export const IncidentStrip: React.FC = () => {
   const { t } = useAppConfig();
   const { snapshot, diagnostics, connectionState, setIsIncidentCenterOpen } =
     useOperations();
   const [isDismissed, setIsDismissed] = useState<boolean>(false);
+  const [clearedIncidentIds, setClearedIncidentIds] = useState<Set<string>>(
+    () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_CLEARED_INCIDENTS);
+        if (saved) return new Set(JSON.parse(saved));
+      } catch {
+        // Ignore storage errors
+      }
+      return new Set<string>();
+    },
+  );
+
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_CLEARED_INCIDENTS);
+        setClearedIncidentIds(
+          saved ? new Set(JSON.parse(saved)) : new Set<string>(),
+        );
+      } catch {
+        // Ignore storage errors
+      }
+    };
+    window.addEventListener("mapf_cleared_incidents", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("mapf_cleared_incidents", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, []);
 
   const robots = snapshot?.robots || [];
   const incidents = snapshot?.incidents || [];
-  const activeIncidents = incidents.filter((i) => i.status === "ACTIVE");
+  const activeIncidents = incidents.filter(
+    (i) => i.status === "ACTIVE" && !clearedIncidentIds.has(i.id),
+  );
 
   const safetyRobots = robots.filter(
     (r) => r.safety !== "NORMAL" && r.safety !== "WAIT",

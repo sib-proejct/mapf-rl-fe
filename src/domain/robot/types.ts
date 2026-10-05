@@ -35,6 +35,7 @@ export interface ActiveController {
 }
 
 export interface Robot {
+  trafficWait?: import("../../contracts/provisioning.generated.ts").TrafficWait;
   id: string;
   contentDigestSha256?: string;
   stateVersion: number;
@@ -49,8 +50,10 @@ export interface Robot {
   currentOrderId?: string;
   orderUpdateId?: number;
   sessionEpoch?: number;
+  simulatorBootId?: string;
   simulatorId?: string;
   batteryPercent?: number;
   stationActionsVersion?: string;
+  bufferState?: import("../../contracts/buffer.generated.ts").BufferState;
   stationState?: import("../../contracts/adapters/stationAdapter.ts").StationState;
 }

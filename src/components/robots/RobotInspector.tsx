@@ -1,3 +1,4 @@
+import { bufferLabel } from "../../contracts/adapters/bufferAdapter.ts";
 import { batteryLabel } from "../../utils/battery.ts";
 import { RobotRemoveButton } from "./RobotRemoveButton.tsx";
 import React, { useState, useEffect } from "react";
@@ -103,6 +104,13 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
         );
       });
 
+      const bufferOwner = robots.find(
+        (r) =>
+          r.bufferState?.mapId === map?.mapId &&
+          r.bufferState?.mapRevision === map?.revision &&
+          r.bufferState?.buffer?.column === selectedNode.column &&
+          r.bufferState?.buffer?.row === selectedNode.row,
+      );
       let assignedGoal: { robotId: string; orderId: string } | null = null;
       for (const order of orders) {
         const match = order.assignments.find(
@@ -260,6 +268,17 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
               </div>
             </div>
 
+            {bufferOwner && (
+              <div
+                className="p-3 rounded-xl bg-violet-500/10 text-xs"
+                aria-live="polite"
+              >
+                {bufferOwner.bufferState?.bufferOccupied
+                  ? "버퍼 점유"
+                  : "버퍼 예약"}
+                : {bufferOwner.id}
+              </div>
+            )}
             {/* Occupying Robot */}
             {occupyingRobot ? (
               <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
@@ -573,6 +592,19 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
         </div>
       </div>
 
+      {bufferLabel(selectedRobot.bufferState) && (
+        <p className="text-xs text-[#86868B]" aria-live="polite">
+          {bufferLabel(selectedRobot.bufferState)}
+          {selectedRobot.bufferState?.buffer &&
+            ` · (${selectedRobot.bufferState.buffer.column}, ${selectedRobot.bufferState.buffer.row})`}
+        </p>
+      )}
+      {selectedRobot.trafficWait && (
+        <p className="text-xs text-[#86868B]" aria-live="polite">
+          통행 대기 · {selectedRobot.trafficWait.blockingRobotIds.join(", ")}{" "}
+          통과 후 자동 재개
+        </p>
+      )}
       {selectedRobot.stationState && (
         <div className="p-3 rounded-xl bg-[#F5F5F7] dark:bg-[#252528] text-xs space-y-1 text-[#1D1D1F] dark:text-[#F5F5F7]">
           <p>

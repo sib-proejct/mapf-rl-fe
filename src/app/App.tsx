@@ -1,3 +1,4 @@
+import { MotionProfilesPage } from "../pages/MotionProfilesPage.tsx";
 import React, { useState } from "react";
 import {
   ThemeLanguageProvider,
@@ -35,6 +36,7 @@ const AppContent: React.FC = () => {
         {currentTab === "scenarios" && <ScenariosPage />}
         {currentTab === "policies" && <PoliciesPage />}
         {currentTab === "events" && <EventsPage />}
+        {currentTab === "motion" && <MotionProfilesPage />}
       </main>
 
       {/* 3. Apple Minimalist Footer */}

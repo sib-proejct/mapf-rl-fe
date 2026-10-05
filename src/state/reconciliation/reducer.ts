@@ -1,3 +1,4 @@
+import { adaptBufferState } from "../../contracts/adapters/bufferAdapter.ts";
 import { adaptQueueTask } from "../../contracts/adapters/queueAdapter.ts";
 /** Pure reconciliation state machine for the canonical Core operations stream. */
 
@@ -36,6 +37,12 @@ import { adaptArrivalAction } from "../../contracts/adapters/stationAdapter.ts";
 import { adaptRasterMap } from "../../contracts/adapters/mapAdapter.ts";
 
 export type ReconciliationAction =
+  | {
+      type: "TELEMETRY_RECEIVED";
+      robotId: string;
+      data: Record<string, unknown>;
+    }
+  | { type: "TELEMETRY_STALE" }
   | {
       type: "SNAPSHOT_REPLACED";
       snapshot: AuthoritativeSnapshot;
@@ -244,6 +251,20 @@ function applyOperation(
     next = { ...next, map };
   } else if (operation.entityType === "ROBOT") {
     next = applyRobot(next, event, operation);
+  } else if (operation.entityType === "BUFFER_STATE") {
+    const state = adaptBufferState(operation.data);
+    if (
+      state.robotId !== operation.entityId ||
+      state.entityVersion !== operation.entityVersion
+    )
+      throw new Error("Buffer state envelope mismatch");
+    next = {
+      ...next,
+      bufferStates: { ...next.bufferStates, [state.robotId]: state },
+      robots: next.robots.map((robot) =>
+        robot.id === state.robotId ? { ...robot, bufferState: state } : robot,
+      ),
+    };
   } else if (operation.entityType === "QUEUE_TASK") {
     const task = adaptQueueTask(operation.data);
     if (
@@ -292,6 +313,20 @@ function applyRobot(
   const existing = snapshot.robots.find(
     (robot) => robot.id === operation.entityId,
   );
+  const epoch = payload.sessionEpoch ?? existing?.sessionEpoch;
+  const boot =
+    typeof operation.data.simulatorBootId === "string"
+      ? operation.data.simulatorBootId
+      : existing?.simulatorBootId;
+  if (
+    existing &&
+    ((epoch ?? 0) < (existing.sessionEpoch ?? 0) ||
+      (epoch === existing.sessionEpoch &&
+        ((existing.simulatorBootId !== undefined &&
+          boot !== existing.simulatorBootId) ||
+          operation.entityVersion < (existing.stateVersion ?? 0))))
+  )
+    return snapshot;
   const robot: Robot = {
     id: operation.entityId,
     contentDigestSha256: operation.contentDigestSha256,
@@ -309,10 +344,14 @@ function applyRobot(
     activeController: payload.activeController,
     currentOrderId: payload.orderId,
     orderUpdateId: payload.orderUpdateId,
-    sessionEpoch: payload.sessionEpoch,
+    sessionEpoch: epoch,
+    simulatorBootId: boot,
     simulatorId: payload.simulatorId,
     stationActionsVersion: payload.stationActionsVersion,
     stationState: payload.stationState,
+    trafficWait: payload.trafficWait,
+    bufferState:
+      snapshot.bufferStates?.[operation.entityId] ?? existing?.bufferState,
     batteryPercent: payload.batteryPercent ?? existing?.batteryPercent ?? 100,
   };
   return {
@@ -720,6 +759,53 @@ export function reconciliationReducer(
   state: ReconciliationState,
   action: ReconciliationAction,
 ): ReconciliationState {
+  if (action.type === "TELEMETRY_STALE") {
+    return { ...state, telemetryStale: true };
+  }
+  if (action.type === "TELEMETRY_RECEIVED") {
+    if (!state.snapshot) return state;
+    const data = action.data;
+    const existing = state.snapshot.robots.find(
+      (robot) => robot.id === action.robotId,
+    );
+    const epoch = Number(data.sessionEpoch);
+    const version = Number(data.stateVersion);
+    if (!Number.isSafeInteger(epoch) || !Number.isSafeInteger(version))
+      return state;
+    if (
+      existing &&
+      (epoch < (existing.sessionEpoch ?? 0) ||
+        (epoch === existing.sessionEpoch &&
+          existing.simulatorBootId !== undefined &&
+          data.simulatorBootId !== existing.simulatorBootId) ||
+        (epoch === (existing.sessionEpoch ?? 0) &&
+          version <= (existing.stateVersion ?? 0)))
+    )
+      return state;
+    const operation: OperationsEventPayload = {
+      entityType: "ROBOT",
+      entityId: action.robotId,
+      entityVersion: version,
+      contentDigestSha256: "",
+      data,
+    };
+    const event: StreamEnvelope = {
+      contractVersion: "1.0.0",
+      messageType: "operations.event",
+      messageId: "telemetry",
+      producer: { kind: "CORE", id: "core" },
+      occurredAt: String(data.observedAt),
+      correlationId: "",
+      eventSequence: 0,
+      payload: { ...operation },
+    };
+    const snapshot = applyRobot(state.snapshot, event, operation);
+    return {
+      ...state,
+      telemetryStale: false,
+      snapshot,
+    };
+  }
   if (action.type === "SNAPSHOT_REPLACED") {
     let snapshot = action.snapshot;
     let sequence = snapshot.cursor.eventSequence;
@@ -1043,4 +1129,29 @@ export function reconciliationReducer(
     };
   }
   return { ...state, diagnostics: INITIAL_DIAGNOSTICS };
+}
+
+/** Apply telemetry staleness for display without overwriting durable stream state. */
+export function selectReconciliationView(
+  state: ReconciliationState,
+): ReconciliationState {
+  if (!state.telemetryStale) return state;
+  return {
+    ...state,
+    connectionState:
+      state.connectionState === "Current" ? "Stale" : state.connectionState,
+    snapshot: state.snapshot
+      ? {
+          ...state.snapshot,
+          freshness:
+            state.snapshot.freshness === "CURRENT"
+              ? "STALE"
+              : state.snapshot.freshness,
+          robots: state.snapshot.robots.map((robot) => ({
+            ...robot,
+            freshness: "STALE",
+          })),
+        }
+      : null,
+  };
 }

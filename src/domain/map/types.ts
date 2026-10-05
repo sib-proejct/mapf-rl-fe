@@ -33,6 +33,8 @@ export interface RasterMap {
     name: string;
   }[];
   stationCatalogDigestSha256?: string;
+  bufferCatalog?: import("../../contracts/buffer.generated.ts").BufferCatalog;
+  bufferCatalogDigestSha256?: string;
   cells: number[]; // 0 = traversable, 1 = blocked
 }
 

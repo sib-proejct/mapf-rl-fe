@@ -1,3 +1,8 @@
+import { adaptMotionProfiles } from "../../contracts/adapters/motionProfile.ts";
+import type {
+  MotionProfilesOutcome,
+  SetMotionProfilesRequest,
+} from "../../contracts/provisioning.generated.ts";
 import type { CreateOrderInput } from "../../domain/mutation/types.ts";
 import { normalizeProblem } from "../../contracts/adapters/problem.ts";
 import type { NormalizedProblem } from "../../contracts/adapters/problem.ts";
@@ -185,6 +190,25 @@ export class CoreApiClient {
       const problem = normalizeProblem(err, 503);
       throw new ProblemError(problem);
     }
+  }
+
+  async motionProfiles(
+    options: FetchSnapshotOptions = {},
+  ): Promise<MotionProfilesOutcome> {
+    return adaptMotionProfiles(
+      await this.getJson("/api/v1/motion-profiles", options),
+    );
+  }
+
+  async saveMotionProfiles(
+    command: SetMotionProfilesRequest,
+  ): Promise<MotionProfilesOutcome> {
+    const outcome = await this.postMutation(
+      `${this.baseUrl}/api/v1/motion-profiles`,
+      command,
+      { requestId: command.requestId, timeoutMs: 5000 },
+    );
+    return adaptMotionProfiles(outcome.data);
   }
 
   async robotProvisioningCapabilities(

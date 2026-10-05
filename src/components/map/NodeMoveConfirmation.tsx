@@ -3,6 +3,7 @@ import { useOperations } from "../../app/providers/OperationsContext.tsx";
 
 export function NodeMoveConfirmation({ nodeId }: { nodeId: number }) {
   const {
+    robotPlacementActive,
     nodeConfirmation,
     confirmNodeCommand,
     dismissNodeConfirmation,
@@ -16,7 +17,7 @@ export function NodeMoveConfirmation({ nodeId }: { nodeId: number }) {
   useEffect(() => {
     if (active) noButton.current?.focus();
   }, [active, nodeConfirmation?.robotId, nodeId]);
-  if (!active || !nodeConfirmation) return null;
+  if (robotPlacementActive || !active || !nodeConfirmation) return null;
   const busy =
     nodeCommand?.state === "submitting" ||
     pendingMutations.some(

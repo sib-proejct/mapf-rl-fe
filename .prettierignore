@@ -8,3 +8,5 @@ src/contracts/contracts.lock.json
 src/contracts/provisioning.generated.ts
 
 src/contracts/queue.generated.ts
+
+src/contracts/buffer.generated.ts

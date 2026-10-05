@@ -1,4 +1,5 @@
 import { adaptStationState } from "./stationAdapter.ts";
+import { adaptTrafficWait } from "./trafficAdapter.ts";
 /**
  * Boundary adapter and validator for inbound WebSocket messages from Core /ws/v1.
  */
@@ -234,6 +235,7 @@ export function adaptRobotStateReport(
         ? payload.stationActionsVersion
         : undefined,
     stationState: adaptStationState(payload.stationState),
+    trafficWait: adaptTrafficWait(payload.trafficWait),
     batteryPercent:
       adaptStationState(payload.stationState)?.batteryPercent ?? batteryPercent,
     orderId: typeof payload.orderId === "string" ? payload.orderId : undefined,
@@ -265,6 +267,7 @@ export function adaptOperationsEvent(
     "ROBOT",
     "ORDER",
     "QUEUE_TASK",
+    "BUFFER_STATE",
     "INCIDENT",
     "PLAN_REVISION",
     "POLICY_DEPLOYMENT",

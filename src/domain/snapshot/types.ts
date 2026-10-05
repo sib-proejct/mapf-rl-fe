@@ -30,6 +30,10 @@ export interface AuthoritativeSnapshot {
   robots: Robot[];
   orders: Order[];
   queueTasks?: import("../../contracts/queue.generated.ts").QueueTask[];
+  bufferStates?: Record<
+    string,
+    import("../../contracts/buffer.generated.ts").BufferState
+  >;
   incidents: Incident[];
   batteryPolicy?: import("../../contracts/battery.generated.ts").BatteryPolicy;
 }

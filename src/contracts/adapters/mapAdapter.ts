@@ -1,4 +1,5 @@
 import type { RasterMap } from "../../domain/map/types.ts";
+import { adaptBufferCatalog } from "./bufferAdapter.ts";
 
 /**
  * Validates and adapts raw Map contract JSON into typed RasterMap domain model.
@@ -126,7 +127,30 @@ export function adaptRasterMap(raw: unknown): RasterMap {
       };
     });
   }
+  const bufferCatalog =
+    obj.bufferCatalog === undefined
+      ? undefined
+      : adaptBufferCatalog(obj.bufferCatalog);
+  if (
+    bufferCatalog &&
+    (bufferCatalog.mapId !== obj.mapId ||
+      bufferCatalog.mapRevision !== obj.revision ||
+      typeof obj.bufferCatalogDigestSha256 !== "string" ||
+      !/^[0-9a-f]{64}$/.test(obj.bufferCatalogDigestSha256) ||
+      bufferCatalog.buffers.some(
+        (b) =>
+          b.column >= widthCells ||
+          b.row >= heightCells ||
+          cells[b.row * widthCells + b.column] !== 0 ||
+          stationCatalog?.some((s) => s.column === b.column && s.row === b.row),
+      ))
+  )
+    throw new Error("Invalid buffer catalog map binding");
   return {
+    bufferCatalog,
+    bufferCatalogDigestSha256: obj.bufferCatalogDigestSha256 as
+      | string
+      | undefined,
     stationCatalog,
     stationCatalogDigestSha256: obj.stationCatalogDigestSha256 as
       | string

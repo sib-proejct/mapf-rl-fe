@@ -1,4 +1,6 @@
 import { adaptQueueTask } from "./queueAdapter.ts";
+import { adaptTrafficWait } from "./trafficAdapter.ts";
+import { adaptBufferState } from "./bufferAdapter.ts";
 import { adaptBatteryPolicy } from "../../utils/battery.ts";
 import { adaptArrivalAction, adaptStationState } from "./stationAdapter.ts";
 import type {
@@ -105,6 +107,7 @@ export function adaptOperationsSnapshot(
 
   let currentMap: RasterMap | null = fallbackMap || null;
   const robots: Robot[] = [];
+  const bufferStates: NonNullable<AuthoritativeSnapshot["bufferStates"]> = {};
   const orders: Order[] = [];
   const queueTasks: import("../queue.generated.ts").QueueTask[] = [];
   const incidents: Incident[] = [];
@@ -140,7 +143,12 @@ export function adaptOperationsSnapshot(
       contentDigestSha256,
     };
 
-    if (entityType === "QUEUE_TASK") {
+    if (entityType === "BUFFER_STATE") {
+      const state = adaptBufferState(payload);
+      if (state.robotId !== entityId || state.entityVersion !== entityVersion)
+        throw new Error("Buffer state envelope mismatch");
+      bufferStates[state.robotId] = state;
+    } else if (entityType === "QUEUE_TASK") {
       const task = adaptQueueTask(payload);
       if (task.taskId !== entityId || task.entityVersion !== entityVersion)
         throw new Error("Queue task envelope mismatch");
@@ -248,6 +256,10 @@ export function adaptOperationsSnapshot(
             : undefined,
         sessionEpoch:
           typeof payload.sessionEpoch === "number" ? payload.sessionEpoch : 1,
+        simulatorBootId:
+          typeof payload.simulatorBootId === "string"
+            ? payload.simulatorBootId
+            : undefined,
         simulatorId:
           typeof payload.simulatorId === "string"
             ? payload.simulatorId
@@ -257,6 +269,7 @@ export function adaptOperationsSnapshot(
             ? payload.stationActionsVersion
             : undefined,
         stationState: adaptStationState(payload.stationState),
+        trafficWait: adaptTrafficWait(payload.trafficWait),
         batteryPercent:
           adaptStationState(payload.stationState)?.batteryPercent ??
           (typeof payload.batteryPercent === "number"
@@ -496,6 +509,7 @@ export function adaptOperationsSnapshot(
   }
 
   for (const robot of robots) {
+    robot.bufferState = bufferStates[robot.id];
     if (!robot.simulatorId) continue;
     const connectivity = connectivityBySimulator.get(robot.simulatorId);
     if (!connectivity) continue;
@@ -525,6 +539,7 @@ export function adaptOperationsSnapshot(
     robots,
     orders,
     queueTasks,
+    bufferStates,
     incidents,
   };
 }

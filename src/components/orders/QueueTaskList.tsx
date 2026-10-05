@@ -10,11 +10,18 @@ export const QueueTaskList: React.FC = () => {
     retryMutation,
     pendingMutations,
     setSelectedOrderId,
+    refreshSnapshot,
   } = useOperations();
   const { language } = useAppConfig();
   const ko = language === "ko";
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearProgress, setClearProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [filter, setFilter] = useState<"active" | "history" | "all">("active");
   const uncertain =
     pendingMutations.find(
       (mutation) =>
@@ -23,6 +30,23 @@ export const QueueTaskList: React.FC = () => {
     )?.targetEntityId ?? null;
   const busy = useRef(false);
   const tasks = snapshot?.queueTasks ?? [];
+  const recentTasks = [...tasks].sort((a, b) => b.sequence - a.sequence);
+  const activeTasks = recentTasks.filter(
+    (task) => !["Completed", "Cancelled"].includes(task.state),
+  );
+  const historyTasks = recentTasks.filter((task) =>
+    ["Completed", "Cancelled"].includes(task.state),
+  );
+  const visibleTasks =
+    filter === "active"
+      ? activeTasks
+      : filter === "history"
+        ? historyTasks
+        : recentTasks;
+  const visibleWaveIds = new Set(visibleTasks.map((task) => task.waveId));
+  const waves = queueWaves(recentTasks).filter((wave) =>
+    visibleWaveIds.has(wave.waveId),
+  );
   const uncertainCreations = pendingMutations.filter(
     (mutation) =>
       mutation.operation === "CREATE_ORDER" && mutation.state === "uncertain",
@@ -47,8 +71,55 @@ export const QueueTaskList: React.FC = () => {
       setPending(null);
     }
   };
+  const clearActiveTasks = async () => {
+    if (busy.current || activeTasks.length === 0) return;
+    const confirmMessage = ko
+      ? `진행 중/대기 중인 ${activeTasks.length}개의 작업을 모두 취소(Clear)하시겠습니까?\n실행 중인 로봇은 안전하게 정지됩니다.`
+      : `Cancel (Clear) all ${activeTasks.length} active/queued tasks?\nRunning robots will safely stop.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    busy.current = true;
+    setIsClearing(true);
+    setError(null);
+
+    const targets = [...activeTasks];
+    const total = targets.length;
+    let completedCount = 0;
+    setClearProgress({ current: 0, total });
+
+    const batchSize = 10;
+    try {
+      for (let i = 0; i < targets.length; i += batchSize) {
+        const batch = targets.slice(i, i + batchSize);
+        await Promise.allSettled(
+          batch.map((task) => cancelQueueTask(task.taskId)),
+        );
+        completedCount = Math.min(total, i + batchSize);
+        setClearProgress({ current: completedCount, total });
+      }
+      await refreshSnapshot();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      busy.current = false;
+      setIsClearing(false);
+      setClearProgress(null);
+    }
+  };
   const reasonText = (reason: string) => {
     const labels: Record<string, [string, string]> = {
+      BUFFER_UNAVAILABLE: [
+        "빈 복귀 버퍼 대기",
+        "Waiting for a free return buffer",
+      ],
+      BUFFER_NOT_CONFIGURED: [
+        "지도에 복귀 버퍼 미설정",
+        "Return buffers are not configured",
+      ],
+      BUFFER_RESERVED: [
+        "버퍼 예약 또는 작업장 이탈 대기",
+        "Waiting for berth or station clearance",
+      ],
       LOW_BATTERY: ["충전 후 실행 대기", "Waiting for charging"],
       BATTERY_DEPLETED: [
         "배터리 고갈: 운영자 복구 필요",
@@ -143,17 +214,65 @@ export const QueueTaskList: React.FC = () => {
   };
   return (
     <section
-      aria-label={ko ? "오더 큐" : "Order queue"}
+      aria-label={ko ? "대기 큐" : "Queue tasks"}
       className="space-y-2 text-xs"
     >
-      <h4 className="font-bold">
-        {ko ? "오더 큐" : "Order queue"} (
-        {
-          tasks.filter((t) => !["Completed", "Cancelled"].includes(t.state))
-            .length
-        }
-        )
-      </h4>
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="font-semibold text-gray-700 dark:text-gray-200">
+          {ko ? "대기 큐" : "Queue Tasks"} ({activeTasks.length})
+        </h4>
+        <div className="flex items-center gap-2">
+          {activeTasks.length > 0 && (
+            <button
+              type="button"
+              disabled={isClearing || pending !== null}
+              onClick={clearActiveTasks}
+              className="px-2 py-0.5 rounded-lg text-xs text-[#C93400] hover:bg-[#C93400]/10 border border-[#C93400]/20 font-medium disabled:opacity-40 transition-colors"
+            >
+              {isClearing
+                ? clearProgress
+                  ? `${ko ? "취소 중…" : "Clearing…"} (${clearProgress.current}/${clearProgress.total})`
+                  : ko
+                    ? "취소 중…"
+                    : "Clearing…"
+                : ko
+                  ? `전체 취소 (Clear ${activeTasks.length})`
+                  : `Clear All (${activeTasks.length})`}
+            </button>
+          )}
+          <span className="text-gray-400 text-[11px]">
+            {ko ? "최근 등록순" : "Newest first"}
+          </span>
+        </div>
+      </div>
+      <div
+        role="group"
+        aria-label={ko ? "작업 표시" : "Task filter"}
+        className="inline-flex p-1 bg-black/5 dark:bg-white/5 rounded-xl gap-1"
+      >
+        {(
+          [
+            ["active", ko ? "진행 중" : "Active", activeTasks.length],
+            ["history", ko ? "완료·취소" : "History", historyTasks.length],
+            ["all", ko ? "전체" : "All", tasks.length],
+          ] as const
+        ).map(([value, label, count]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={filter === value}
+            onClick={() => setFilter(value)}
+            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+              filter === value
+                ? "bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white"
+                : "text-gray-500 hover:text-black dark:hover:text-white"
+            }`}
+          >
+            {label}{" "}
+            <span className="opacity-70 font-mono text-[11px]">{count}</span>
+          </button>
+        ))}
+      </div>
       {uncertainCreations.map((mutation) => (
         <div
           key={mutation.requestId}
@@ -174,84 +293,156 @@ export const QueueTaskList: React.FC = () => {
           </button>
         </div>
       ))}
-      {queueWaves(tasks).map((wave) => (
-        <p key={wave.waveId} className="rounded-xl bg-[#0071E3]/10 p-2">
-          {ko ? "웨이브" : "Wave"} {wave.waveId.slice(0, 8)} ·{" "}
-          {ko ? "완료" : "Completed"} {wave.counts.Completed}/
-          {wave.taskIds.length} · {ko ? "취소" : "Cancelled"}{" "}
-          {wave.counts.Cancelled} · {ko ? "보류" : "Held"} {wave.counts.Held}
-        </p>
-      ))}
+      {waves.length > 0 && (
+        <details className="rounded-xl border border-black/10 dark:border-white/10 p-2">
+          <summary className="cursor-pointer text-gray-500">
+            {ko ? "웨이브 요약" : "Wave summaries"} ({waves.length})
+          </summary>
+          <div className="space-y-1 pt-2">
+            {waves.map((wave) => (
+              <p key={wave.waveId} className="rounded-xl bg-[#0071E3]/10 p-2">
+                {ko ? "웨이브" : "Wave"} {wave.waveId.slice(0, 8)} ·{" "}
+                {ko ? "완료" : "Completed"} {wave.counts.Completed}/
+                {wave.taskIds.length} · {ko ? "취소" : "Cancelled"}{" "}
+                {wave.counts.Cancelled} · {ko ? "보류" : "Held"}{" "}
+                {wave.counts.Held}
+              </p>
+            ))}
+          </div>
+        </details>
+      )}
       {error && (
         <p role="alert" className="text-[#C93400]">
           {error}
         </p>
       )}
-      {tasks.map((task) => (
-        <details
-          key={task.taskId}
-          className="rounded-xl border border-black/10 dark:border-white/10 p-2"
-        >
-          <summary className="cursor-pointer">
-            #{task.sequence} · {task.state} ·{" "}
-            {task.robotId ?? task.requestedRobotId ?? (ko ? "자동" : "Auto")} ·{" "}
-            {task.steps[task.stage]?.arrivalAction ?? (ko ? "이동" : "Move")}
-          </summary>
-          <div className="space-y-2 pt-2">
-            <p>
-              {task.steps
-                .map(
-                  (step) =>
-                    `${step.arrivalAction ?? "MOVE"} (${step.goalColumn}, ${step.goalRow})`,
-                )
-                .join(" → ")}
-            </p>
-            <p>
-              {ko ? "단계" : "Stage"} {task.stage + 1}/{task.steps.length} ·{" "}
-              {task.taskId.slice(0, 8)}
-            </p>
-            {task.reason && (
-              <p role="status">
-                {task.reason === "CARGO_RECOVERY_REQUIRED"
-                  ? ko
-                    ? "화물이 남아 있습니다. 이 로봇을 지정한 PLACE 작업으로 복구하세요."
-                    : "Cargo remains. Queue a PLACE task for this robot to recover."
-                  : reasonText(task.reason)}
-              </p>
-            )}
-            {task.orderIds.map((orderId, index) => (
-              <button
-                key={orderId}
-                type="button"
-                onClick={() => setSelectedOrderId(orderId)}
-                className="mr-2 text-[#0071E3]"
-              >
-                {ko ? "실행 오더" : "Execution"} {index + 1}
-              </button>
-            ))}
-            {(!["Completed", "Cancelled", "Cancelling"].includes(task.state) ||
-              uncertain === task.taskId) && (
-              <button
-                type="button"
-                disabled={
-                  pending !== null ||
-                  (uncertain !== null && uncertain !== task.taskId)
-                }
-                onClick={() => cancel(task.taskId)}
-                className="text-[#C93400] disabled:opacity-50"
-              >
-                {uncertain === task.taskId
-                  ? ko
-                    ? "같은 ID로 취소 재시도"
-                    : "Retry cancellation"
-                  : ko
-                    ? "작업 취소"
-                    : "Cancel task"}
-              </button>
-            )}
-          </div>
-        </details>
-      ))}
+      {visibleTasks.length === 0 && (
+        <p className="p-2 text-gray-500">
+          {filter === "active"
+            ? ko
+              ? "진행 중인 작업이 없습니다."
+              : "No active tasks."
+            : ko
+              ? "표시할 작업이 없습니다."
+              : "No tasks to show."}
+        </p>
+      )}
+      {visibleTasks.map((task) => {
+        const stateColorMap: Record<string, string> = {
+          Queued:
+            "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+          Running:
+            "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+          Held: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+          Cancelling:
+            "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+          Completed:
+            "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+          Cancelled: "bg-gray-500/10 text-gray-500 border-gray-500/20",
+        };
+        const stateColor =
+          stateColorMap[task.state] ??
+          "bg-gray-500/10 text-gray-500 border-gray-500/20";
+        return (
+          <details
+            key={task.taskId}
+            className="rounded-xl border border-black/10 dark:border-white/10 p-2.5 bg-white dark:bg-[#1C1C1E] transition-all"
+          >
+            <summary className="cursor-pointer list-none flex items-center justify-between gap-2 select-none">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono text-gray-400 font-semibold text-[11px]">
+                  #{task.sequence}
+                </span>
+                <span
+                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold border ${stateColor}`}
+                >
+                  {ko
+                    ? ({
+                        Queued: "대기",
+                        Running: "실행 중",
+                        Held: "보류",
+                        Cancelling: "취소 중",
+                        Completed: "완료",
+                        Cancelled: "취소",
+                      }[task.state] ?? task.state)
+                    : task.state}
+                </span>
+                <span className="truncate font-medium text-gray-700 dark:text-gray-300">
+                  {task.robotId ??
+                    task.requestedRobotId ??
+                    (ko ? "자동 배정" : "Auto")}
+                </span>
+              </div>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 font-mono text-gray-600 dark:text-gray-400 shrink-0">
+                {task.steps[task.stage]?.arrivalAction ??
+                  (ko ? "이동" : "MOVE")}
+              </span>
+            </summary>
+            <div className="space-y-2 pt-2.5 mt-2 border-t border-black/5 dark:border-white/5 text-xs">
+              <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300 font-mono text-[11px]">
+                {task.steps
+                  .map(
+                    (step) =>
+                      `${step.arrivalAction ?? "MOVE"} (${step.goalColumn}, ${step.goalRow})`,
+                  )
+                  .join(" → ")}
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-gray-400">
+                <span>
+                  {ko ? "단계" : "Stage"} {task.stage + 1}/{task.steps.length}
+                </span>
+                <span className="font-mono">{task.taskId.slice(0, 8)}</span>
+              </div>
+              {task.reason && (
+                <p
+                  role="status"
+                  className="p-1.5 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400 text-[11px]"
+                >
+                  {task.reason === "CARGO_RECOVERY_REQUIRED"
+                    ? ko
+                      ? "화물이 남아 있습니다. 이 로봇을 지정한 PLACE 작업으로 복구하세요."
+                      : "Cargo remains. Queue a PLACE task for this robot to recover."
+                    : reasonText(task.reason)}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {task.orderIds.map((orderId, index) => (
+                  <button
+                    key={orderId}
+                    type="button"
+                    onClick={() => setSelectedOrderId(orderId)}
+                    className="px-2 py-1 rounded-lg bg-[#0071E3]/10 hover:bg-[#0071E3]/20 text-[#0071E3] text-xs font-medium transition-colors"
+                  >
+                    {ko ? "실행 오더" : "Execution"} {index + 1}
+                  </button>
+                ))}
+                {(!["Completed", "Cancelled", "Cancelling"].includes(
+                  task.state,
+                ) ||
+                  uncertain === task.taskId) && (
+                  <button
+                    type="button"
+                    disabled={
+                      pending !== null ||
+                      (uncertain !== null && uncertain !== task.taskId)
+                    }
+                    onClick={() => cancel(task.taskId)}
+                    className="ml-auto px-2 py-1 rounded-lg text-[#C93400] hover:bg-[#C93400]/10 text-xs font-medium disabled:opacity-40 transition-colors"
+                  >
+                    {uncertain === task.taskId
+                      ? ko
+                        ? "같은 ID로 취소 재시도"
+                        : "Retry cancellation"
+                      : ko
+                        ? "작업 취소"
+                        : "Cancel task"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </details>
+        );
+      })}
     </section>
   );
 };

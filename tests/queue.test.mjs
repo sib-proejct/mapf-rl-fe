@@ -5,7 +5,10 @@ import {
   adaptQueueTask,
   queueWaves,
 } from "../src/contracts/adapters/queueAdapter.ts";
-import { adaptOperationsSnapshot } from "../src/contracts/adapters/snapshotAdapter.ts";
+import {
+  adaptOperationsSnapshot as adaptSnapshot,
+  DEFAULT_CANONICAL_MAP,
+} from "../src/contracts/adapters/snapshotAdapter.ts";
 import { adaptOperationsEvent } from "../src/contracts/adapters/eventAdapter.ts";
 
 const id = "60000000-0000-4000-8000-000000000001";
@@ -216,3 +219,7 @@ test("queue events ignore duplicate/stale versions and snapshots recover uncerta
   });
   assert.equal(manager.get(cancellation.requestId).state, "confirmed");
 });
+
+// Queue-only fixtures explicitly supply a map; production snapshots must contain one.
+const adaptOperationsSnapshot = (raw) =>
+  adaptSnapshot(raw, DEFAULT_CANONICAL_MAP);

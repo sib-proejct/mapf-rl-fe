@@ -91,3 +91,31 @@ Live 새 오더와 맵 노드 명령은 Core 큐에 등록한다. 로봇이 바�
 여러 행은 최대 100개 작업의 웨이브로 제출한다. 큐 상세에서 대기 사유, 단계, 실행 오더와
 웨이브 완료·취소·보류 수를 확인할 수 있다. 화물이 남아 보류되면 같은 로봇의 PLACE 작업으로
 복구한다. 불확실한 제출은 같은 requestId로 재시도한다. Fixture 모드에는 운반 웨이브를 제공하지 않는다.
+
+### 일반 상태 telemetry
+
+Core 소유 `telemetry 1.0.0` 계약과 `/ws/v1/telemetry` (`mapf.telemetry.v1`)를
+`GET /api/v1/capabilities`로 협상한다. 일반 위치·배터리 보고는 200ms, 물리·안전 tick은
+100ms다. 일반 보고는 별도 `telemetrySequence`, Redis TTL 15초, `PROJECTION` ACK를 사용하고
+PostgreSQL 기록과 durable spool을 만들지 않는다. Redis 유실 후 최신 Simulator 보고로 복구한다.
+주문·완료·취소·안전·station 전이는 선행 durable 상태 보고와 기존 ACK/spool을 유지한다.
+telemetry 연결 단절 또는 3초 ACK 부재는 Simulator hold를 유발하며 최신 ACK와 기존 안전
+조건 확인 후 재개한다. FE는 두 순번을 독립 관리하고 연결 유실 시 stale·snapshot 복구를 한다.
+미지원 Core는 legacy DB 보고 경로를 사용하며 Redis 장애는 자동 fallback 사유가 아니다.
+일반 상태 DB sampling은 없다. 이전 이미지·저장 볼륨은 배포와 rollback 시 보존한다.
+
+### PLACE departure buffers
+
+Core's buffer catalog is authoritative. The map and robot panels show reserved/occupied
+berths and departure status from independent `BUFFER_STATE` snapshot/event entities.
+Types are generated from Core's buffer schema; regenerate through Core's contracts script.
+Deploy this consumer with the updated Core/Planner. `tests/buffers.test.mjs` checks
+catalog validation, topology, duplicate handling and telemetry reconciliation.
+
+### Passage waiting
+
+Core-generated `TrafficWait` (`traffic-control 1.0.0`) is adapted from snapshots
+and live robot reports. The robot inspector displays normal passage waiting and
+blocking robot IDs while retaining `EXECUTING` / `WAIT`. A fresh report without the
+field clears the wait. Motion preview times are explicitly estimates and do not
+provide motion permission. Deploy with the matching Core and Simulator.

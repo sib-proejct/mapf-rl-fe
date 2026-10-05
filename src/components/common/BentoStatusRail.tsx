@@ -19,12 +19,15 @@ import {
   Bell,
   CheckCircle2,
   X,
+  Trash2,
 } from "lucide-react";
 import {
   formatLocaleTime,
   formatUtcIso,
   formatStateAge,
 } from "../../utils/time/time.ts";
+
+import { STORAGE_KEY_CLEARED_INCIDENTS } from "../incidents/IncidentCenter.tsx";
 
 export const BentoStatusRail: React.FC = () => {
   const { t, language } = useAppConfig();
@@ -40,6 +43,37 @@ export const BentoStatusRail: React.FC = () => {
     setIsIncidentCenterOpen,
     setSelectedIncidentId,
   } = useOperations();
+
+  const [clearedIncidentIds, setClearedIncidentIds] = useState<Set<string>>(
+    () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_CLEARED_INCIDENTS);
+        if (saved) return new Set(JSON.parse(saved));
+      } catch {
+        // Ignore storage errors
+      }
+      return new Set<string>();
+    },
+  );
+
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_CLEARED_INCIDENTS);
+        setClearedIncidentIds(
+          saved ? new Set(JSON.parse(saved)) : new Set<string>(),
+        );
+      } catch {
+        // Ignore storage errors
+      }
+    };
+    window.addEventListener("mapf_cleared_incidents", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("mapf_cleared_incidents", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, []);
 
   const [showAlarmPopup, setShowAlarmPopup] = useState<boolean>(false);
   const alarmMenuRef = useRef<HTMLDivElement>(null);
@@ -108,7 +142,8 @@ export const BentoStatusRail: React.FC = () => {
   );
 
   const activeIncidents = (snapshot?.incidents || []).filter(
-    (incident) => incident.status === "ACTIVE",
+    (incident) =>
+      incident.status === "ACTIVE" && !clearedIncidentIds.has(incident.id),
   );
   const isReconciling =
     freshness === "RECONCILING" || connectionState === "Reconciling";
@@ -277,16 +312,49 @@ export const BentoStatusRail: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAlarmPopup(false);
-                    setIsIncidentCenterOpen(true);
-                  }}
-                  className="text-xs font-semibold text-[#0071E3] dark:text-[#2997FF] hover:underline"
-                >
-                  {t("incidentCenterTitle")} →
-                </button>
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAlarmPopup(false);
+                      setIsIncidentCenterOpen(true);
+                    }}
+                    className="text-xs font-semibold text-[#0071E3] dark:text-[#2997FF] hover:underline cursor-pointer"
+                  >
+                    {t("incidentCenterTitle")} →
+                  </button>
+
+                  {activeIncidents.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(t("incidentClearHistoryConfirm"))) {
+                          const next = new Set(clearedIncidentIds);
+                          (snapshot?.incidents || []).forEach((i) =>
+                            next.add(i.id),
+                          );
+                          setClearedIncidentIds(next);
+                          try {
+                            localStorage.setItem(
+                              STORAGE_KEY_CLEARED_INCIDENTS,
+                              JSON.stringify(Array.from(next)),
+                            );
+                            window.dispatchEvent(
+                              new Event("mapf_cleared_incidents"),
+                            );
+                          } catch {
+                            // Ignore storage errors
+                          }
+                        }
+                      }}
+                      className="px-2 py-1 rounded-lg text-gray-500 hover:text-[#C93400] hover:bg-[#C93400]/10 text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                      title={t("incidentClearHistory")}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>{t("incidentClearHistory")}</span>
+                    </button>
+                  )}
+                </div>
 
                 {/* Popover List */}
                 <div className="space-y-2.5 max-h-80 overflow-y-auto no-scrollbar text-xs">
@@ -481,7 +549,11 @@ export const BentoStatusRail: React.FC = () => {
             {isSimulatingMotion ? (
               <>
                 <Pause className="w-3 h-3 fill-current" />
-                <span>Streaming (10Hz)</span>
+                <span>
+                  {transportMode === "LIVE_WEBSOCKET"
+                    ? "Streaming (5Hz)"
+                    : "Streaming (10Hz)"}
+                </span>
               </>
             ) : (
               <>

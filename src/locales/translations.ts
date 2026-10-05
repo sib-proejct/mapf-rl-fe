@@ -216,7 +216,7 @@ export const translations = {
     noActiveOrder: "배정된 작업 없음 (유휴 상태)",
 
     // Robot List
-    robotListTitle: "로봇 함대",
+    robotListTitle: "로봇 목록",
     robotSearchPlaceholder: "로봇 ID 검색...",
     robotFilterAll: "전체",
     robotFilterExecuting: "실행 중",
@@ -226,10 +226,17 @@ export const translations = {
     robotNoResults: "검색 조건과 일치하는 로봇이 없습니다.",
 
     // Order List
-    orderListTitle: "작업 큐",
+    orderListTitle: "오더 목록",
     orderAssignments: "배정 목표",
     orderGoalCoordinates: "목표 좌표",
     orderNoOrders: "현재 활성화된 작업이 없습니다.",
+    orderFilterActive: "진행 중",
+    orderFilterHistory: "완료·취소",
+    orderFilterAll: "전체",
+    orderClearHistory: "완료 내역 비우기",
+    orderClearHistoryConfirm:
+      "화면에 표시된 완료 및 취소 이력을 비우시겠습니까?",
+    orderNewTransport: "운반 / 웨이브",
 
     // State Views
     loadingTitle: "권위 스냅샷을 불러오는 중입니다...",
@@ -370,6 +377,9 @@ export const translations = {
     incidentActionAck: "인시던트 확인 (Acknowledge)",
     incidentActionResolve: "인시던트 해결 (Resolve)",
     incidentActionClearEstop: "안전 해제 (Clear Stop)",
+    incidentClearHistory: "인시던트 내역 비우기",
+    incidentClearHistoryConfirm:
+      "모든 인시던트 내역(활성/해결 포함)을 화면 목록에서 비우시겠습니까?",
     incidentPersistentNotice:
       "알림 띠를 닫아도 인시던트는 사라지지 않으며, 영구 관제 센터에서 추적 및 복구됩니다.",
     incidentNoActive:
@@ -591,7 +601,7 @@ export const translations = {
     noActiveOrder: "No active order assigned (Idle)",
 
     // Robot List
-    robotListTitle: "Fleet Robots",
+    robotListTitle: "Robot List",
     robotSearchPlaceholder: "Search Robot ID...",
     robotFilterAll: "All",
     robotFilterExecuting: "Executing",
@@ -601,10 +611,17 @@ export const translations = {
     robotNoResults: "No robots match the selected filter.",
 
     // Order List
-    orderListTitle: "Order Queue",
+    orderListTitle: "Order List",
     orderAssignments: "Target Assignments",
     orderGoalCoordinates: "Goal Coordinates",
     orderNoOrders: "No active dispatch orders in flight.",
+    orderFilterActive: "Active",
+    orderFilterHistory: "History",
+    orderFilterAll: "All",
+    orderClearHistory: "Clear History",
+    orderClearHistoryConfirm:
+      "Clear completed and cancelled orders from the screen?",
+    orderNewTransport: "Transport / Wave",
 
     // State Views
     loadingTitle: "Loading Authoritative Snapshot...",
@@ -744,6 +761,9 @@ export const translations = {
     incidentActionAck: "Acknowledge",
     incidentActionResolve: "Resolve Incident",
     incidentActionClearEstop: "Clear Stop",
+    incidentClearHistory: "Clear Incident History",
+    incidentClearHistoryConfirm:
+      "Are you sure you want to clear all incidents from the list?",
     incidentPersistentNotice:
       "Dismissing alert banners does not dismiss incidents. All events are tracked persistently here.",
     incidentNoActive: "No active incidents. All systems nominal.",

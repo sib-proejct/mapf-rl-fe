@@ -14,7 +14,6 @@ import {
   Database,
   Box,
   FileText,
-  ShieldAlert,
   HelpCircle,
   Plus,
   Zap,
@@ -25,7 +24,8 @@ export type NavTab =
   | "orders"
   | "scenarios"
   | "policies"
-  | "events";
+  | "events"
+  | "motion";
 
 interface TopNavBarProps {
   currentTab: NavTab;
@@ -47,15 +47,12 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     setMockScenario,
     connectionState,
     setIsOrderModalOpen,
-    setIsIncidentCenterOpen,
   } = useOperations();
 
   const env = import.meta.env.VITE_MAPF_PUBLIC_ENVIRONMENT || "LOCAL";
 
   const freshness = snapshot?.freshness || "DISCONNECTED";
   const robots = snapshot?.robots || [];
-  const incidents = snapshot?.incidents || [];
-  const activeIncidents = incidents.filter((i) => i.status === "ACTIVE");
 
   const safetyRobots = robots.filter(
     (r) => r.safety !== "NORMAL" && r.safety !== "WAIT",
@@ -65,11 +62,12 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   );
 
   const getSystemStatusBadge = () => {
-    if (connectionState === "Reconciling") {
+    if (connectionState === "LoadingSnapshot" || (loading && !snapshot)) {
       return {
-        label: t("connReconciling"),
+        label:
+          language === "ko" ? "시스템 연결 중..." : "Connecting Systems...",
         bg: "text-[#0071E3] dark:text-[#2997FF]",
-        dot: "bg-[#0071E3] animate-spin",
+        dot: "bg-[#0071E3] animate-pulse",
       };
     }
     if (connectionState === "ConnectingStream") {
@@ -79,14 +77,11 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
         dot: "bg-[#FF9500] animate-pulse",
       };
     }
-    if (activeIncidents.length > 0) {
+    if (connectionState === "Reconciling") {
       return {
-        label:
-          language === "ko"
-            ? `인시던트 (${activeIncidents.length})`
-            : `${activeIncidents.length} Incidents`,
-        bg: "text-[#D70015] dark:text-[#FF453A]",
-        dot: "bg-[#FF3B30] animate-pulse",
+        label: t("connReconciling"),
+        bg: "text-[#0071E3] dark:text-[#2997FF]",
+        dot: "bg-[#0071E3] animate-spin",
       };
     }
     if (safetyRobots.length > 0) {
@@ -145,7 +140,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     <header className="sticky top-0 z-40 w-full h-14 sm:h-16 backdrop-blur-xl bg-[#FBFBFD]/90 dark:bg-black/85 border-b border-black/[0.04] dark:border-white/[0.08] transition-colors duration-300">
       <div className="max-w-[1920px] mx-auto h-full px-4 sm:px-6 lg:px-8 xl:px-10 flex items-center justify-between gap-4">
         {/* Left: Brand Identity & Product Logo */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 shrink-0">
           <div className="flex items-center gap-2.5 select-none">
             {/* Boston Dynamics Atlas Mascot App Icon */}
             <img
@@ -172,7 +167,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           {/* Center-Left: Global Navigation Single-Shell Tabs */}
           <nav
             aria-label="Main Navigation"
-            className="hidden md:flex items-center gap-1"
+            className="hidden xl:flex items-center gap-1 whitespace-nowrap"
           >
             {[
               { id: "operations", label: t("navOperations") },
@@ -180,6 +175,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
               { id: "scenarios", label: t("navScenarios") },
               { id: "policies", label: t("navPolicies") },
               { id: "events", label: t("navEvents") },
+              {
+                id: "motion",
+                label: language === "ko" ? "속도 프로파일" : "Motion profiles",
+              },
             ].map((tab) => {
               const isActive = currentTab === tab.id;
               return (
@@ -202,7 +201,20 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           </nav>
         </div>
 
-        {/* Right: Quick Action Controls, Incident Center, Transport, Env & Toggles */}
+        <button
+          type="button"
+          className="xl:hidden text-xs text-[#0071E3] whitespace-nowrap"
+          onClick={() =>
+            onSelectTab(currentTab === "motion" ? "operations" : "motion")
+          }
+        >
+          {currentTab === "motion"
+            ? t("navOperations")
+            : language === "ko"
+              ? "속도 설정"
+              : "Motion"}
+        </button>
+        {/* Right: Quick Action Controls, Transport, Env & Toggles */}
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Quick Action: New Dispatch Order Button */}
           <button
@@ -215,28 +227,8 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
             <span className="hidden sm:inline">New Order</span>
           </button>
 
-          {/* Quick Action: Incident Center Button */}
-          <button
-            type="button"
-            onClick={() => setIsIncidentCenterOpen(true)}
-            className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 cursor-pointer text-xs font-bold ${
-              activeIncidents.length > 0
-                ? "bg-[#FF3B30]/15 dark:bg-[#FF453A]/20 text-[#D70015] dark:text-[#FF453A] border-[#FF3B30]/30 animate-pulse"
-                : "bg-[#F5F5F7] dark:bg-[#1C1C1E] text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] border-black/[0.06] dark:border-white/[0.08]"
-            }`}
-            title="Open Persistent Incident Center"
-          >
-            <ShieldAlert className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Incidents</span>
-            {activeIncidents.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-[#FF3B30] text-white text-[10px] font-mono tabular-nums">
-                {activeIncidents.length}
-              </span>
-            )}
-          </button>
-
           {/* Transport Mode & Scenario Selector Ribbon */}
-          <div className="hidden lg:flex items-center gap-1 bg-[#F5F5F7] dark:bg-[#1C1C1E] p-1 rounded-full border border-black/[0.06] dark:border-white/[0.08] text-xs">
+          <div className="hidden 2xl:flex items-center gap-1 bg-[#F5F5F7] dark:bg-[#1C1C1E] p-1 rounded-full border border-black/[0.06] dark:border-white/[0.08] text-xs">
             {/* Fixture Stream */}
             <button
               onClick={() => setTransportMode("FIXTURE_STREAM")}
@@ -324,17 +316,28 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
 
           {/* System & Freshness Status */}
           <div
-            className={`hidden md:flex items-center gap-1.5 px-1 py-1 text-xs font-medium ${badge.bg}`}
+            className={`hidden 2xl:flex items-center gap-1.5 px-1 py-1 text-xs font-medium ${badge.bg}`}
+            style={{
+              width: 152,
+              minWidth: 152,
+              maxWidth: 152,
+              flex: "0 0 152px",
+            }}
+            title={badge.label}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
-            <span className="tracking-tight">{badge.label}</span>
+            <span
+              className={`w-1.5 h-1.5 shrink-0 rounded-full ${badge.dot}`}
+            />
+            <span className="min-w-0 flex-1 truncate tracking-tight">
+              {badge.label}
+            </span>
           </div>
 
           {/* Refresh Button */}
           <button
             onClick={() => refreshSnapshot()}
             disabled={loading}
-            className="w-7.5 h-7.5 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] bg-[#F5F5F7] dark:bg-[#1C1C1E] hover:bg-[#EBEBED] dark:hover:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] transition-all focus:outline-none cursor-pointer"
+            className="w-[30px] h-[30px] shrink-0 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] bg-[#F5F5F7] dark:bg-[#1C1C1E] hover:bg-[#EBEBED] dark:hover:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] transition-all focus:outline-none cursor-pointer"
             title="Refresh snapshot data"
             aria-label="Refresh snapshot"
           >
@@ -343,14 +346,14 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
             />
           </button>
 
-          <span className="hidden sm:inline text-[#D2D2D7] dark:text-[#3A3A3C]">
+          <span className="hidden sm:inline-block w-1 shrink-0 text-center text-[#D2D2D7] dark:text-[#3A3A3C]">
             |
           </span>
 
           {/* Language Toggle Pill */}
           <button
             onClick={toggleLanguage}
-            className="h-7.5 px-2.5 rounded-full flex items-center gap-1 text-[11px] font-bold bg-[#F5F5F7] dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#EBEBED] dark:hover:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] transition-all focus:outline-none select-none cursor-pointer"
+            className="w-[52px] h-[30px] shrink-0 justify-center rounded-full flex items-center gap-1 text-[11px] font-bold bg-[#F5F5F7] dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-[#EBEBED] dark:hover:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] transition-all focus:outline-none select-none cursor-pointer"
             title={language === "ko" ? "Switch to English" : "한국어로 전환"}
             aria-label="Toggle language"
           >
@@ -361,7 +364,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           {/* Theme Toggle Pill */}
           <button
             onClick={toggleTheme}
-            className="w-7.5 h-7.5 rounded-full flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] bg-[#F5F5F7] dark:bg-[#1C1C1E] hover:bg-[#EBEBED] dark:hover:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] transition-all focus:outline-none select-none cursor-pointer"
+            className="w-[30px] h-[30px] shrink-0 rounded-full flex items-center justify-center text-[#1D1D1F] dark:text-[#F5F5F7] bg-[#F5F5F7] dark:bg-[#1C1C1E] hover:bg-[#EBEBED] dark:hover:bg-[#2C2C2E] border border-black/[0.06] dark:border-white/[0.08] transition-all focus:outline-none select-none cursor-pointer"
             title={
               theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"
             }
