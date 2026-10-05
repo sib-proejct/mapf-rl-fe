@@ -1,3 +1,4 @@
+import { adaptPlannedRoute } from "../../contracts/adapters/plannedRouteAdapter.ts";
 import { adaptBufferState } from "../../contracts/adapters/bufferAdapter.ts";
 import { adaptQueueTask } from "../../contracts/adapters/queueAdapter.ts";
 /** Pure reconciliation state machine for the canonical Core operations stream. */
@@ -152,6 +153,23 @@ export function applySingleEvent(
       decision: "APPLIED",
       nextSequence: sequence,
     };
+  }
+
+  if (operation.entityType === "ORDER") {
+    const currentOrder = snapshot.orders.find(
+      (order) => order.id === operation.entityId,
+    );
+    if (
+      currentOrder &&
+      typeof operation.data.orderUpdateId === "number" &&
+      operation.data.orderUpdateId < currentOrder.orderUpdateId
+    ) {
+      return {
+        nextSnapshot: advanceCursor(snapshot, sequence),
+        decision: "STALE",
+        nextSequence: sequence,
+      };
+    }
   }
 
   const existing = snapshot.entityVersions[entityKey(operation)];
@@ -472,10 +490,13 @@ function applyOrder(
     entityVersion: operation.entityVersion,
     contentDigestSha256: operation.contentDigestSha256,
     orderUpdateId,
+    plannedRoute: adaptPlannedRoute(
+      data.plannedRoute,
+      operation.entityId,
+      orderUpdateId,
+    ),
     planRevisionId:
-      typeof data.planRevisionId === "string"
-        ? data.planRevisionId
-        : existing?.planRevisionId,
+      typeof data.planRevisionId === "string" ? data.planRevisionId : undefined,
     state,
     requestId:
       typeof data.requestId === "string" ? data.requestId : existing?.requestId,

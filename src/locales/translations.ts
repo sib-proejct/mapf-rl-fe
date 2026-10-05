@@ -103,6 +103,11 @@ export const translations = {
     mapLayerGoals: "목표 지점",
     mapLayerLabels: "로봇 라벨",
     mapLayerTrails: "이동 궤적",
+    mapPlannedRoute: "예상 이동 경로",
+    mapObservedTrail: "지나온 궤적",
+    mapRouteUnavailable: "예상 경로 없음",
+    mapRoutePlanning: "경로 계획 중",
+    mapRouteStale: "연결 또는 위치 갱신 대기 · 경로가 최신이 아닐 수 있음",
     mapLayerArrows: "간선 방향 화살표",
     mapLayerWaypoints: "경유지 노드",
     mapLayerEdges: "간선 (Edges)",
@@ -226,17 +231,17 @@ export const translations = {
     robotNoResults: "검색 조건과 일치하는 로봇이 없습니다.",
 
     // Order List
-    orderListTitle: "오더 목록",
+    orderListTitle: "오더",
     orderAssignments: "배정 목표",
     orderGoalCoordinates: "목표 좌표",
     orderNoOrders: "현재 활성화된 작업이 없습니다.",
     orderFilterActive: "진행 중",
     orderFilterHistory: "완료·취소",
     orderFilterAll: "전체",
-    orderClearHistory: "완료 내역 비우기",
+    orderClearHistory: "비우기",
     orderClearHistoryConfirm:
       "화면에 표시된 완료 및 취소 이력을 비우시겠습니까?",
-    orderNewTransport: "운반 / 웨이브",
+    orderNewTransport: "웨이브",
 
     // State Views
     loadingTitle: "권위 스냅샷을 불러오는 중입니다...",
@@ -488,6 +493,12 @@ export const translations = {
     mapLayerGoals: "Target Goals",
     mapLayerLabels: "Robot Labels",
     mapLayerTrails: "Motion Trails",
+    mapPlannedRoute: "Planned route",
+    mapObservedTrail: "Observed trail",
+    mapRouteUnavailable: "No planned route",
+    mapRoutePlanning: "Planning route",
+    mapRouteStale:
+      "Waiting for connection or position updates · route may be stale",
     mapLayerArrows: "Edge Direction Arrows",
     mapLayerWaypoints: "Waypoints",
     mapLayerEdges: "Graph Edges",

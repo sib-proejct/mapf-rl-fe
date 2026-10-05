@@ -1,3 +1,4 @@
+import { adaptPlannedRoute } from "./plannedRouteAdapter.ts";
 import { adaptQueueTask } from "./queueAdapter.ts";
 import { adaptTrafficWait } from "./trafficAdapter.ts";
 import { adaptBufferState } from "./bufferAdapter.ts";
@@ -378,6 +379,11 @@ export function adaptOperationsSnapshot(
         entityVersion,
         contentDigestSha256,
         orderUpdateId,
+        plannedRoute: adaptPlannedRoute(
+          payload.plannedRoute,
+          String(entityId),
+          orderUpdateId,
+        ),
         planRevisionId:
           typeof payload.planRevisionId === "string"
             ? payload.planRevisionId

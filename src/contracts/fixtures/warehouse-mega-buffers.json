@@ -1,0 +1,157 @@
+{
+  "contractVersion": "1.0.0",
+  "mapId": "123e4567-e89b-42d3-a456-426614174064",
+  "mapRevision": 1,
+  "buffers": [
+    {
+      "column": 2,
+      "row": 3,
+      "name": "Buffer South-01"
+    },
+    {
+      "column": 6,
+      "row": 3,
+      "name": "Buffer South-02"
+    },
+    {
+      "column": 10,
+      "row": 3,
+      "name": "Buffer South-03"
+    },
+    {
+      "column": 14,
+      "row": 3,
+      "name": "Buffer South-04"
+    },
+    {
+      "column": 18,
+      "row": 3,
+      "name": "Buffer South-05"
+    },
+    {
+      "column": 22,
+      "row": 3,
+      "name": "Buffer South-06"
+    },
+    {
+      "column": 26,
+      "row": 3,
+      "name": "Buffer South-07"
+    },
+    {
+      "column": 30,
+      "row": 3,
+      "name": "Buffer South-08"
+    },
+    {
+      "column": 34,
+      "row": 3,
+      "name": "Buffer South-09"
+    },
+    {
+      "column": 38,
+      "row": 3,
+      "name": "Buffer South-10"
+    },
+    {
+      "column": 42,
+      "row": 3,
+      "name": "Buffer South-11"
+    },
+    {
+      "column": 46,
+      "row": 3,
+      "name": "Buffer South-12"
+    },
+    {
+      "column": 50,
+      "row": 3,
+      "name": "Buffer South-13"
+    },
+    {
+      "column": 54,
+      "row": 3,
+      "name": "Buffer South-14"
+    },
+    {
+      "column": 58,
+      "row": 3,
+      "name": "Buffer South-15"
+    },
+    {
+      "column": 2,
+      "row": 36,
+      "name": "Buffer North-01"
+    },
+    {
+      "column": 6,
+      "row": 36,
+      "name": "Buffer North-02"
+    },
+    {
+      "column": 10,
+      "row": 36,
+      "name": "Buffer North-03"
+    },
+    {
+      "column": 14,
+      "row": 36,
+      "name": "Buffer North-04"
+    },
+    {
+      "column": 18,
+      "row": 36,
+      "name": "Buffer North-05"
+    },
+    {
+      "column": 22,
+      "row": 36,
+      "name": "Buffer North-06"
+    },
+    {
+      "column": 26,
+      "row": 36,
+      "name": "Buffer North-07"
+    },
+    {
+      "column": 30,
+      "row": 36,
+      "name": "Buffer North-08"
+    },
+    {
+      "column": 34,
+      "row": 36,
+      "name": "Buffer North-09"
+    },
+    {
+      "column": 38,
+      "row": 36,
+      "name": "Buffer North-10"
+    },
+    {
+      "column": 42,
+      "row": 36,
+      "name": "Buffer North-11"
+    },
+    {
+      "column": 46,
+      "row": 36,
+      "name": "Buffer North-12"
+    },
+    {
+      "column": 50,
+      "row": 36,
+      "name": "Buffer North-13"
+    },
+    {
+      "column": 54,
+      "row": 36,
+      "name": "Buffer North-14"
+    },
+    {
+      "column": 58,
+      "row": 36,
+      "name": "Buffer North-15"
+    }
+  ]
+}

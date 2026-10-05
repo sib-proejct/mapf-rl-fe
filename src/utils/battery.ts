@@ -57,13 +57,13 @@ export function adaptBatteryPolicy(raw: unknown): BatteryPolicy | undefined {
   if (typeof raw !== "object") throw new Error("Invalid battery policy");
   const policy = raw as Record<string, unknown>;
   if (
-    policy.version !== "1.0.0" ||
+    !["1.0.0", "1.1.0"].includes(String(policy.version)) ||
     typeof policy.lowBatteryPercent !== "number" ||
     !Number.isFinite(policy.lowBatteryPercent) ||
     policy.lowBatteryPercent < 0 ||
     policy.lowBatteryPercent > 100 ||
     policy.depletedPercent !== 0 ||
-    policy.chargeTargetPercent !== 100
+    policy.chargeTargetPercent !== (policy.version === "1.0.0" ? 100 : 80)
   ) {
     throw new Error("Invalid battery policy");
   }

@@ -34,7 +34,8 @@ const MAX_HEIGHT = 1400;
 
 const DEFAULT_WIDTH_RATIO = 72; // 72% Map / 28% Sidebar
 const MIN_WIDTH_RATIO = 40;
-const MAX_WIDTH_RATIO = 78; // Ensures sidebar has at least 22% width, preventing cramped vertical text layout
+const MAX_WIDTH_RATIO = 76; // Ensures sidebar has at least 24% width (min 320px on standard screens)
+const MIN_SIDEBAR_WIDTH_PX = 320;
 
 export const OperationsPage: React.FC = () => {
   const { t, language } = useAppConfig();
@@ -165,8 +166,28 @@ export const OperationsPage: React.FC = () => {
           "touches" in moveEvent
             ? moveEvent.touches[0].clientX
             : moveEvent.clientX;
-        const rawRatio = ((clientX - rect.left) / rect.width) * 100;
-        updateMapWidthRatio(Math.round(rawRatio));
+        const maxAllowedWidth = Math.max(0, rect.width - MIN_SIDEBAR_WIDTH_PX);
+        const clampedWidth = Math.min(
+          Math.max(0, clientX - rect.left),
+          maxAllowedWidth,
+        );
+        const dynamicMaxRatio =
+          rect.width > 0
+            ? (maxAllowedWidth / rect.width) * 100
+            : MAX_WIDTH_RATIO;
+        const effectiveMaxRatio = Math.min(
+          MAX_WIDTH_RATIO,
+          Math.floor(dynamicMaxRatio),
+        );
+        const rawRatio =
+          rect.width > 0
+            ? (clampedWidth / rect.width) * 100
+            : DEFAULT_WIDTH_RATIO;
+        const boundedRatio = Math.min(
+          Math.max(Math.round(rawRatio), MIN_WIDTH_RATIO),
+          Math.max(MIN_WIDTH_RATIO, effectiveMaxRatio),
+        );
+        updateMapWidthRatio(boundedRatio);
       };
 
       const onMouseUp = () => {
@@ -248,8 +269,28 @@ export const OperationsPage: React.FC = () => {
             ? moveEvent.touches[0].clientY
             : moveEvent.clientY;
 
-        const rawRatio = ((clientX - rect.left) / rect.width) * 100;
-        updateMapWidthRatio(Math.round(rawRatio));
+        const maxAllowedWidth = Math.max(0, rect.width - MIN_SIDEBAR_WIDTH_PX);
+        const clampedWidth = Math.min(
+          Math.max(0, clientX - rect.left),
+          maxAllowedWidth,
+        );
+        const dynamicMaxRatio =
+          rect.width > 0
+            ? (maxAllowedWidth / rect.width) * 100
+            : MAX_WIDTH_RATIO;
+        const effectiveMaxRatio = Math.min(
+          MAX_WIDTH_RATIO,
+          Math.floor(dynamicMaxRatio),
+        );
+        const rawRatio =
+          rect.width > 0
+            ? (clampedWidth / rect.width) * 100
+            : DEFAULT_WIDTH_RATIO;
+        const boundedRatio = Math.min(
+          Math.max(Math.round(rawRatio), MIN_WIDTH_RATIO),
+          Math.max(MIN_WIDTH_RATIO, effectiveMaxRatio),
+        );
+        updateMapWidthRatio(boundedRatio);
 
         const deltaY = clientY - startY;
         updateMapHeight(initialHeight + deltaY);
@@ -388,16 +429,16 @@ export const OperationsPage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  updateMapWidthRatio(78);
+                  updateMapWidthRatio(76);
                   setShowLayoutMenu(false);
                 }}
                 className={`px-2.5 py-1.5 rounded-xl text-left font-medium transition-all ${
-                  mapWidthRatio === 78
+                  mapWidthRatio === 76
                     ? "bg-[#0071E3]/10 text-[#0071E3] dark:text-[#2997FF] font-bold border border-[#0071E3]/20"
                     : "hover:bg-black/5 dark:hover:bg-white/5 text-[#1D1D1F] dark:text-[#F5F5F7]"
                 }`}
               >
-                78% / 22%
+                76% / 24%
               </button>
               <button
                 onClick={() => {
@@ -591,7 +632,7 @@ export const OperationsPage: React.FC = () => {
           {/* Right Column: Slim Operations Sidebar (Collapsible) */}
           {!isSidebarCollapsed && (
             <div
-              className="flex flex-col min-w-[280px] transition-all duration-75"
+              className="flex flex-col min-w-[320px] shrink-0 transition-all duration-75"
               style={{
                 width: `${100 - mapWidthRatio}%`,
                 height: "100%",

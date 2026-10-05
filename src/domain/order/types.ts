@@ -36,6 +36,7 @@ export interface OrderTimelineEntry {
 }
 
 export interface Order {
+  plannedRoute?: import("../../contracts/planned-route.generated.ts").PlannedRoute;
   requestId?: string;
   id: string;
   entityVersion: number;

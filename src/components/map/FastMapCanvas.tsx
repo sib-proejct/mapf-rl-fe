@@ -6,6 +6,9 @@ import {
   selectionFill,
 } from "./mapRobotDisplay.ts";
 import { NodeMoveConfirmation } from "./NodeMoveConfirmation.tsx";
+import { usePlannedRobotRoute } from "./usePlannedRobotRoute.ts";
+import { drawPlannedRoute } from "./drawPlannedRoute.ts";
+import { PlannedRouteStatus } from "./PlannedRouteStatus.tsx";
 import { useRobotTrails } from "./useRobotTrails.ts";
 import React, {
   useState,
@@ -61,6 +64,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
   const {
     snapshot,
+    connectionState,
     selectedRobotId,
     setSelectedRobotId,
     robotPlacementNodeIds,
@@ -73,6 +77,19 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
   const map = snapshot?.map;
   const robots = useMemo(() => snapshot?.robots || [], [snapshot?.robots]);
   const orders = useMemo(() => snapshot?.orders || [], [snapshot?.orders]);
+  const plannedRoutes = usePlannedRobotRoute(
+    robots,
+    orders,
+    map,
+    selectedRobotId,
+  );
+  const selectedRobot = robots.find((robot) => robot.id === selectedRobotId);
+  const selectedOrder = selectedRobot
+    ? findRobotOrder(selectedRobot, orders, map?.mapId, map?.revision)
+    : undefined;
+  const selectedPlannedRoute = selectedRobotId
+    ? plannedRoutes.get(selectedRobotId)
+    : undefined;
   const robotTrails = useRobotTrails(robots, orders, map?.mapId, map?.revision);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -615,6 +632,18 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     }
 
     // 4. Observed movement trail, displayed as a dashed line.
+    if (selectedPlannedRoute) {
+      drawPlannedRoute(
+        ctx,
+        selectedPlannedRoute.points,
+        mapDim,
+        baseWidth,
+        baseHeight,
+        zoom,
+        isDark,
+      );
+    }
+
     if (showTrails) {
       ctx.save();
       ctx.lineCap = "round";
@@ -645,7 +674,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     const arrowTip = robotRadius * 0.72;
     const arrowBase = robotRadius * 0.36;
 
-    if (showGoals && orders.length > 0) {
+    if ((showGoals || selectedRobotId) && orders.length > 0) {
       ctx.save();
       const goals = robots.flatMap((robot) => {
         const order = findRobotOrder(robot, orders, map?.mapId, map?.revision);
@@ -660,6 +689,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
           Number(b.robotId === selectedRobotId),
       );
       for (const assign of goals) {
+        if (!showGoals && assign.robotId !== selectedRobotId) continue;
         const gx = (assign.goalColumn + 0.5) * cellW;
         const gy = (heightCells - 1 - assign.goalRow + 0.5) * cellH;
 
@@ -933,6 +963,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     robots,
     orders,
     selectedRobotId,
+    selectedPlannedRoute,
     robotPlacementNodeIds,
     selectedNodeId,
     robotTrails,
@@ -1217,6 +1248,12 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
           ref={canvasRef}
           onClick={handleCanvasClick}
           className="w-full h-full block"
+        />
+        <PlannedRouteStatus
+          robot={selectedRobot}
+          order={selectedOrder}
+          available={!!selectedPlannedRoute}
+          disconnected={connectionState !== "Current"}
         />
 
         {/* Live Coordinate Tracker Badge (Top Left Overlay) */}

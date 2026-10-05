@@ -190,7 +190,7 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                     }
                   }
                 }}
-                className="px-2 py-1 rounded-full text-gray-500 hover:text-[#C93400] hover:bg-[#C93400]/10 text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                className="px-2 py-1 rounded-full text-gray-500 hover:text-[#C93400] hover:bg-[#C93400]/10 text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
                 title={t("orderClearHistory")}
               >
                 <Trash2 className="w-3 h-3" />
@@ -204,7 +204,7 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                 setIsWaveFormOpen(true);
                 setIsOrderModalOpen(false);
               }}
-              className="px-2.5 py-1 rounded-full bg-[#0071E3]/10 dark:bg-[#2997FF]/15 text-[#0071E3] dark:text-[#2997FF] hover:bg-[#0071E3]/20 dark:hover:bg-[#2997FF]/25 text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer border border-[#0071E3]/20 dark:border-[#2997FF]/30 disabled:opacity-50"
+              className="px-2.5 py-1 rounded-full bg-[#0071E3]/10 dark:bg-[#2997FF]/15 text-[#0071E3] dark:text-[#2997FF] hover:bg-[#0071E3]/20 dark:hover:bg-[#2997FF]/25 text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer border border-[#0071E3]/20 dark:border-[#2997FF]/30 disabled:opacity-50 whitespace-nowrap"
               title={t("orderNewTransport")}
             >
               <Layers className="w-3 h-3" />
@@ -217,10 +217,10 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                 setIsOrderModalOpen(true);
                 setIsWaveFormOpen(false);
               }}
-              className="px-2.5 py-1 rounded-full bg-[#0071E3] dark:bg-[#2997FF] text-white text-[11px] font-semibold hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer shadow-xs disabled:opacity-50"
+              className="px-2.5 py-1 rounded-full bg-[#0071E3] dark:bg-[#2997FF] text-white text-[11px] font-semibold hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer shadow-xs disabled:opacity-50 whitespace-nowrap"
             >
               <Plus className="w-3 h-3" />
-              <span>New Order</span>
+              <span>New</span>
             </button>
           </div>
         </div>
@@ -243,7 +243,7 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
               type="button"
               aria-pressed={orderFilter === value}
               onClick={() => setOrderFilter(value)}
-              className={`rounded-lg px-2.5 py-1 font-medium transition-all ${
+              className={`rounded-lg px-2.5 py-1 font-medium transition-all whitespace-nowrap break-keep-all ${
                 orderFilter === value
                   ? "bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white"
                   : "text-gray-500 hover:text-black dark:hover:text-white"

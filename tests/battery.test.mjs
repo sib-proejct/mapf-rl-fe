@@ -9,16 +9,16 @@ import { adaptOperationsSnapshot } from "../src/contracts/adapters/snapshotAdapt
 import { CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE } from "../src/contracts/fixtures/canonical.ts";
 
 const policy = {
-  version: "1.0.0",
-  lowBatteryPercent: 20,
+  version: "1.1.0",
+  lowBatteryPercent: 30,
   depletedPercent: 0,
-  chargeTargetPercent: 100,
+  chargeTargetPercent: 80,
 };
-const robot = { id: "r1", batteryPercent: 20, operationalState: "IDLE" };
+const robot = { id: "r1", batteryPercent: 30, operationalState: "IDLE" };
 test("Core policy gates new work at the boundary and preserves legacy snapshots", () => {
   assert.equal(isLowBattery(robot, policy), true);
   assert.equal(
-    isLowBattery({ ...robot, batteryPercent: 20.01 }, policy),
+    isLowBattery({ ...robot, batteryPercent: 30.01 }, policy),
     false,
   );
   assert.equal(isLowBattery(robot), false);
@@ -33,6 +33,17 @@ test("Core policy gates new work at the boundary and preserves legacy snapshots"
       batteryPolicy: policy,
     }).batteryPolicy,
     policy,
+  );
+  assert.deepEqual(
+    adaptBatteryPolicy({
+      ...policy,
+      version: "1.0.0",
+      chargeTargetPercent: 100,
+    }),
+    { ...policy, version: "1.0.0", chargeTargetPercent: 100 },
+  );
+  assert.throws(() =>
+    adaptBatteryPolicy({ ...policy, chargeTargetPercent: 100 }),
   );
   assert.throws(() =>
     adaptBatteryPolicy({ ...policy, lowBatteryPercent: NaN }),
