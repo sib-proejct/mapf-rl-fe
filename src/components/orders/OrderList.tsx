@@ -1,4 +1,6 @@
-import React from "react";
+import { QueueTaskList } from "./QueueTaskList.tsx";
+import { TransportWaveForm } from "./TransportWaveForm.tsx";
+import React, { useState } from "react";
 import { OrderCreateForm } from "./OrderCreateForm.tsx";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
@@ -13,8 +15,12 @@ import {
   RotateCcw,
   XCircle,
   Activity,
+  Trash2,
+  Layers,
 } from "lucide-react";
 import { formatStateAge } from "../../utils/time/time.ts";
+
+export const STORAGE_KEY_CLEARED_ORDERS = "mapf_cleared_order_ids";
 
 export interface OrderListProps {
   embedded?: boolean;
@@ -34,7 +40,39 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
     setActionDialogTarget,
   } = useOperations();
 
-  const orders = snapshot?.orders || [];
+  const [isWaveFormOpen, setIsWaveFormOpen] = useState(false);
+  const [orderFilter, setOrderFilter] = useState<"active" | "history" | "all">(
+    "active",
+  );
+  const [clearedOrderIds, setClearedOrderIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CLEARED_ORDERS);
+      if (saved) {
+        return new Set(JSON.parse(saved));
+      }
+    } catch {
+      // Ignore storage errors
+    }
+    return new Set<string>();
+  });
+
+  const allOrders = snapshot?.orders || [];
+  const visibleOrdersPool = allOrders.filter(
+    (order) => !clearedOrderIds.has(order.id),
+  );
+
+  const activeOrders = visibleOrdersPool.filter(
+    (order) => !["Completed", "Cancelled", "Rejected"].includes(order.state),
+  );
+  const historyOrders = visibleOrdersPool.filter((order) =>
+    ["Completed", "Cancelled", "Rejected"].includes(order.state),
+  );
+  const filteredOrders =
+    orderFilter === "active"
+      ? activeOrders
+      : orderFilter === "history"
+        ? historyOrders
+        : visibleOrdersPool;
 
   const getLifecycleDot = (state: string) => {
     switch (state) {
@@ -115,28 +153,107 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
       }
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 mb-3.5 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-[#0071E3]/10 dark:bg-[#2997FF]/15 flex items-center justify-center text-[#0071E3] dark:text-[#2997FF]">
-            <Box className="w-3.5 h-3.5" />
+      <div className="space-y-2.5 mb-3.5 shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg bg-[#0071E3]/10 dark:bg-[#2997FF]/15 flex items-center justify-center text-[#0071E3] dark:text-[#2997FF]">
+              <Box className="w-3.5 h-3.5" />
+            </div>
+            <h3 className="text-sm font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight">
+              {t("orderListTitle")}
+            </h3>
+            <span className="text-[11px] font-mono font-bold bg-[#F5F5F7] dark:bg-[#252528] text-[#86868B] px-2 py-0.5 rounded-full border border-black/[0.04] dark:border-white/[0.06] tabular-nums">
+              {filteredOrders.length}
+            </span>
           </div>
-          <h3 className="text-sm font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight">
-            {t("orderListTitle")}
-          </h3>
-          <span className="text-[11px] font-mono font-bold bg-[#F5F5F7] dark:bg-[#252528] text-[#86868B] px-2 py-0.5 rounded-full border border-black/[0.04] dark:border-white/[0.06] tabular-nums">
-            {orders.length}
-          </span>
+
+          <div className="flex items-center gap-1.5">
+            {historyOrders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(t("orderClearHistoryConfirm"))) {
+                    const next = new Set(clearedOrderIds);
+                    historyOrders.forEach((o) => next.add(o.id));
+                    setClearedOrderIds(next);
+                    try {
+                      localStorage.setItem(
+                        STORAGE_KEY_CLEARED_ORDERS,
+                        JSON.stringify(Array.from(next)),
+                      );
+                      window.dispatchEvent(new Event("mapf_cleared_orders"));
+                    } catch {
+                      // Ignore storage errors
+                    }
+                    if (orderFilter === "history") {
+                      setOrderFilter("active");
+                    }
+                  }
+                }}
+                className="px-2 py-1 rounded-full text-gray-500 hover:text-[#C93400] hover:bg-[#C93400]/10 text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                title={t("orderClearHistory")}
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>{t("orderClearHistory")}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={isWaveFormOpen}
+              onClick={() => {
+                setIsWaveFormOpen(true);
+                setIsOrderModalOpen(false);
+              }}
+              className="px-2.5 py-1 rounded-full bg-[#0071E3]/10 dark:bg-[#2997FF]/15 text-[#0071E3] dark:text-[#2997FF] hover:bg-[#0071E3]/20 dark:hover:bg-[#2997FF]/25 text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer border border-[#0071E3]/20 dark:border-[#2997FF]/30 disabled:opacity-50"
+              title={t("orderNewTransport")}
+            >
+              <Layers className="w-3 h-3" />
+              <span>{t("orderNewTransport")}</span>
+            </button>
+            <button
+              type="button"
+              disabled={isOrderModalOpen}
+              onClick={() => {
+                setIsOrderModalOpen(true);
+                setIsWaveFormOpen(false);
+              }}
+              className="px-2.5 py-1 rounded-full bg-[#0071E3] dark:bg-[#2997FF] text-white text-[11px] font-semibold hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              <Plus className="w-3 h-3" />
+              <span>New Order</span>
+            </button>
+          </div>
         </div>
 
-        <button
-          type="button"
-          disabled={isOrderModalOpen}
-          onClick={() => setIsOrderModalOpen(true)}
-          className="px-2.5 py-1 rounded-full bg-[#0071E3] dark:bg-[#2997FF] text-white text-[11px] font-semibold hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer shadow-xs disabled:opacity-50"
+        {/* Filter Segmented Control */}
+        <div
+          role="group"
+          aria-label={t("orderListTitle")}
+          className="inline-flex p-1 bg-black/5 dark:bg-white/5 rounded-xl gap-1 text-xs"
         >
-          <Plus className="w-3 h-3" />
-          <span>New Order</span>
-        </button>
+          {(
+            [
+              ["active", t("orderFilterActive"), activeOrders.length],
+              ["history", t("orderFilterHistory"), historyOrders.length],
+              ["all", t("orderFilterAll"), visibleOrdersPool.length],
+            ] as const
+          ).map(([value, label, count]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={orderFilter === value}
+              onClick={() => setOrderFilter(value)}
+              className={`rounded-lg px-2.5 py-1 font-medium transition-all ${
+                orderFilter === value
+                  ? "bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white"
+                  : "text-gray-500 hover:text-black dark:hover:text-white"
+              }`}
+            >
+              {label}{" "}
+              <span className="opacity-70 font-mono text-[11px]">{count}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Orders List */}
@@ -175,22 +292,18 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
           </div>
         )}
         <OrderCreateForm />
-        {orders.length === 0 ? (
-          <div className="py-12 text-center text-xs text-[#86868B] space-y-3">
+        <TransportWaveForm
+          open={isWaveFormOpen}
+          onOpenChange={setIsWaveFormOpen}
+          hideTrigger={true}
+        />
+        <QueueTaskList />
+        {filteredOrders.length === 0 ? (
+          <div className="py-8 text-center text-xs text-[#86868B]">
             <p className="font-medium">{t("orderNoOrders")}</p>
-            {!isOrderModalOpen && (
-              <button
-                type="button"
-                onClick={() => setIsOrderModalOpen(true)}
-                className="px-3.5 py-1.5 rounded-full bg-[#0071E3] text-white text-xs font-semibold hover:opacity-90 inline-flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Create First Order</span>
-              </button>
-            )}
           </div>
         ) : (
-          orders.map((order) => {
+          filteredOrders.map((order) => {
             const isSelected = order.id === selectedOrderId;
             const stepIdx = getLifecycleStepIndex(order.state);
             const isAppAck = order.state === "Applied";

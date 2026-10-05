@@ -3,7 +3,7 @@ import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
 import { RobotList } from "../robots/RobotList.tsx";
 import { RobotInspector } from "../robots/RobotInspector.tsx";
-import { OrderList } from "../orders/OrderList.tsx";
+import { OrderList, STORAGE_KEY_CLEARED_ORDERS } from "../orders/OrderList.tsx";
 import { Bot, Activity, Box } from "lucide-react";
 
 export type SidebarTab = "fleet" | "orders";
@@ -25,9 +25,40 @@ export const OperationsSidebar: React.FC<OperationsSidebarProps> = ({
   } = useOperations();
 
   const [activeTab, setActiveTab] = useState<SidebarTab>("fleet");
+  const [clearedOrderIds, setClearedOrderIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CLEARED_ORDERS);
+      if (saved) return new Set(JSON.parse(saved));
+    } catch {
+      // Ignore storage errors
+    }
+    return new Set<string>();
+  });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_CLEARED_ORDERS);
+        setClearedOrderIds(
+          saved ? new Set(JSON.parse(saved)) : new Set<string>(),
+        );
+      } catch {
+        // Ignore storage errors
+      }
+    };
+    window.addEventListener("mapf_cleared_orders", handleStorageChange);
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("mapf_cleared_orders", handleStorageChange);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   const robots = snapshot?.robots || [];
   const orders = snapshot?.orders || [];
+  const visibleOrders = orders.filter(
+    (order) => !clearedOrderIds.has(order.id),
+  );
 
   // If robot or node is selected, ensure we are on the fleet tab where inline inspector lives
   useEffect(() => {
@@ -110,7 +141,7 @@ export const OperationsSidebar: React.FC<OperationsSidebarProps> = ({
                   : "bg-black/5 dark:bg-white/5 text-[#86868B]"
               }`}
             >
-              {orders.length}
+              {visibleOrders.length}
             </span>
           </button>
         </div>

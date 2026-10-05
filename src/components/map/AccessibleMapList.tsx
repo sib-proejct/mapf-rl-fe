@@ -133,6 +133,8 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
     snapshot,
     selectedRobotId,
     setSelectedRobotId,
+    robotPlacementActive,
+    robotPlacementNodeIds,
     selectedNodeId,
     setSelectedNodeId,
     clickNode,
@@ -869,7 +871,9 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                 </tr>
               ) : (
                 filteredAndSortedNodes.map((node) => {
-                  const isSelected = selectedNodeId === node.id;
+                  const isSelected =
+                    selectedNodeId === node.id ||
+                    robotPlacementNodeIds.includes(node.id);
                   const uiMeta = getNodeTypeUiMeta(node.type);
                   const outgoing =
                     topology?.nodeOutgoingEdges.get(node.id) || [];
@@ -887,6 +891,14 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                       robotCell.row === node.row
                     );
                   });
+
+                  const bufferOwner = robots.find(
+                    (r) =>
+                      r.bufferState?.mapId === map?.mapId &&
+                      r.bufferState?.mapRevision === map?.revision &&
+                      r.bufferState?.buffer?.column === node.column &&
+                      r.bufferState?.buffer?.row === node.row,
+                  );
 
                   return (
                     <tr
@@ -917,6 +929,14 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                         <span className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
                           {node.name}
                         </span>{" "}
+                        {bufferOwner && (
+                          <span className="text-xs text-violet-600 dark:text-violet-400">
+                            {bufferOwner.bufferState?.bufferOccupied
+                              ? "버퍼 점유"
+                              : "버퍼 예약"}
+                            : {bufferOwner.id}
+                          </span>
+                        )}
                         <span className="text-[11px] text-[#86868B]">
                           ({node.zone})
                         </span>
@@ -974,7 +994,17 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                               : "bg-[#F5F5F7] dark:bg-[#2C2C2E] hover:bg-[#0071E3] dark:hover:text-white text-[#1D1D1F] dark:text-[#F5F5F7]"
                           }`}
                         >
-                          {isSelected ? "Inspecting" : "Inspect"}
+                          {robotPlacementActive
+                            ? robotPlacementNodeIds.includes(node.id)
+                              ? language === "ko"
+                                ? "선택 해제"
+                                : "Deselect"
+                              : language === "ko"
+                                ? "시작 위치 선택"
+                                : "Select start"
+                            : isSelected
+                              ? "Inspecting"
+                              : "Inspect"}
                         </button>
                         {isSelected && (
                           <div

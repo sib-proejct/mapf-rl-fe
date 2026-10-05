@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
 import {
@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Check,
   Zap,
+  Trash2,
 } from "lucide-react";
 import {
   formatStateAge,
@@ -27,6 +28,8 @@ import type {
   IncidentSeverity,
   IncidentStatus,
 } from "../../domain/incident/types.ts";
+
+export const STORAGE_KEY_CLEARED_INCIDENTS = "mapf_cleared_incident_ids";
 
 export interface IncidentCenterProps {
   embedded?: boolean;
@@ -52,11 +55,47 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
   const [filterStatus, setFilterStatus] = useState<string>("ACTIVE");
   const [filterCategory, setFilterCategory] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [clearedIncidentIds, setClearedIncidentIds] = useState<Set<string>>(
+    () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_CLEARED_INCIDENTS);
+        if (saved) return new Set(JSON.parse(saved));
+      } catch {
+        // Ignore storage errors
+      }
+      return new Set<string>();
+    },
+  );
 
-  const incidents = snapshot?.incidents || [];
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_CLEARED_INCIDENTS);
+        setClearedIncidentIds(
+          saved ? new Set(JSON.parse(saved)) : new Set<string>(),
+        );
+      } catch {
+        // Ignore storage errors
+      }
+    };
+    window.addEventListener("mapf_cleared_incidents", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("mapf_cleared_incidents", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, []);
+
+  const allIncidents = snapshot?.incidents || [];
+  const visibleIncidents = allIncidents.filter(
+    (inc) => !clearedIncidentIds.has(inc.id),
+  );
+
+  // Clearable incidents: all visible incidents
+  const clearableIncidents = visibleIncidents;
 
   // Filtered incidents
-  const filtered = incidents.filter((inc) => {
+  const filtered = visibleIncidents.filter((inc) => {
     const matchesStatus = filterStatus === "ALL" || inc.status === filterStatus;
     const matchesCategory =
       filterCategory === "ALL" ||
@@ -70,7 +109,26 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
     return matchesStatus && matchesCategory && matchesSearch;
   });
 
-  const activeCount = incidents.filter((i) => i.status === "ACTIVE").length;
+  const activeCount = visibleIncidents.filter(
+    (i) => i.status === "ACTIVE",
+  ).length;
+
+  const handleClearHistory = () => {
+    if (window.confirm(t("incidentClearHistoryConfirm"))) {
+      const next = new Set(clearedIncidentIds);
+      clearableIncidents.forEach((i) => next.add(i.id));
+      setClearedIncidentIds(next);
+      try {
+        localStorage.setItem(
+          STORAGE_KEY_CLEARED_INCIDENTS,
+          JSON.stringify(Array.from(next)),
+        );
+        window.dispatchEvent(new Event("mapf_cleared_incidents"));
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  };
 
   const getSeverityBadge = (severity: IncidentSeverity) => {
     switch (severity) {
@@ -120,54 +178,81 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
         </div>
       </div>
 
-      {/* Filter Tabs & Search */}
+      {/* Filter Tabs & Search & Actions */}
       <div className="space-y-2">
-        <div className="grid grid-cols-4 bg-[#F2F4F6] dark:bg-[#252528] p-1 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] text-xs gap-1">
-          {[
-            { val: "ALL", label: t("incidentFilterAll") },
-            {
-              val: "ACTIVE",
-              label: `${t("incidentFilterActive")} (${activeCount})`,
-            },
-            { val: "ACKNOWLEDGED", label: t("incidentFilterAcked") },
-            { val: "RESOLVED", label: t("incidentFilterResolved") },
-          ].map((tab) => (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <div className="grid grid-cols-4 bg-[#F2F4F6] dark:bg-[#252528] p-1 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] text-xs gap-1 flex-1">
+            {[
+              { val: "ALL", label: t("incidentFilterAll") },
+              {
+                val: "ACTIVE",
+                label: `${t("incidentFilterActive")} (${activeCount})`,
+              },
+              { val: "ACKNOWLEDGED", label: t("incidentFilterAcked") },
+              { val: "RESOLVED", label: t("incidentFilterResolved") },
+            ].map((tab) => (
+              <button
+                key={`tab-${tab.val}`}
+                onClick={() => setFilterStatus(tab.val)}
+                className={`py-1.5 px-2 rounded-xl text-center font-semibold transition-all truncate text-[11px] cursor-pointer ${
+                  filterStatus === tab.val
+                    ? "bg-white dark:bg-[#1C1C1E] text-[#191F28] dark:text-[#F5F5F7] font-bold shadow-xs"
+                    : "text-[#86868B] hover:text-[#1D1D1F]"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {clearableIncidents.length > 0 && (
             <button
-              key={`tab-${tab.val}`}
-              onClick={() => setFilterStatus(tab.val)}
-              className={`py-1.5 px-2 rounded-xl text-center font-semibold transition-all truncate text-[11px] ${
-                filterStatus === tab.val
-                  ? "bg-white dark:bg-[#1C1C1E] text-[#191F28] dark:text-[#F5F5F7] font-bold shadow-xs"
-                  : "text-[#86868B] hover:text-[#1D1D1F]"
-              }`}
+              type="button"
+              onClick={handleClearHistory}
+              className="px-2.5 py-1.5 rounded-xl text-gray-500 hover:text-[#C93400] hover:bg-[#C93400]/10 text-[11px] font-medium transition-colors flex items-center justify-center gap-1 cursor-pointer shrink-0 border border-black/[0.04] dark:border-white/[0.06]"
+              title={t("incidentClearHistory")}
             >
-              {tab.label}
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{t("incidentClearHistory")}</span>
             </button>
-          ))}
+          )}
         </div>
 
-        {/* Category Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
-          {[
-            { key: "ALL", label: "All Types" },
-            { key: "safety", label: t("incidentCategorySafety") },
-            { key: "deadlock", label: t("incidentCategoryDeadlock") },
-            { key: "collision_risk", label: t("incidentCategoryCollision") },
-            { key: "fault", label: t("incidentCategoryFault") },
-            { key: "connectivity", label: t("incidentCategoryConn") },
-          ].map((cat) => (
-            <button
-              key={`cat-${cat.key}`}
-              onClick={() => setFilterCategory(cat.key)}
-              className={`px-2.5 py-1 rounded-full border text-[10px] font-semibold whitespace-nowrap transition-all ${
-                filterCategory === cat.key
-                  ? "bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] border-transparent"
-                  : "bg-white dark:bg-[#1C1C1E] text-[#86868B] border-black/[0.05] dark:border-white/[0.07] hover:border-black/20"
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
+        {/* Category Pills & Search */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] flex-1">
+            {[
+              { key: "ALL", label: "All Types" },
+              { key: "safety", label: t("incidentCategorySafety") },
+              { key: "deadlock", label: t("incidentCategoryDeadlock") },
+              { key: "collision_risk", label: t("incidentCategoryCollision") },
+              { key: "fault", label: t("incidentCategoryFault") },
+              { key: "connectivity", label: t("incidentCategoryConn") },
+            ].map((cat) => (
+              <button
+                key={`cat-${cat.key}`}
+                onClick={() => setFilterCategory(cat.key)}
+                className={`px-2.5 py-1 rounded-full border text-[10px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  filterCategory === cat.key
+                    ? "bg-[#1D1D1F] dark:bg-[#F5F5F7] text-white dark:text-[#1D1D1F] border-transparent"
+                    : "bg-white dark:bg-[#1C1C1E] text-[#86868B] border-black/[0.05] dark:border-white/[0.07] hover:border-black/20"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative min-w-[160px] sm:w-48 shrink-0">
+            <Search className="w-3.5 h-3.5 text-[#86868B] absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search incidents..."
+              className="w-full pl-8 pr-2.5 py-1 rounded-xl bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.08] text-[11px] text-[#1D1D1F] dark:text-[#F5F5F7] placeholder-[#86868B] focus:outline-none focus:ring-1 focus:ring-[#0071E3]"
+            />
+          </div>
         </div>
       </div>
 
@@ -274,12 +359,6 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
                     {inc.status === "ACTIVE" && (
                       <button
                         type="button"
-                        disabled={transportMode !== "FIXTURE_STREAM"}
-                        title={
-                          transportMode !== "FIXTURE_STREAM"
-                            ? "Disabled until Core exposes an authoritative incident action endpoint"
-                            : undefined
-                        }
                         onClick={(e) => {
                           e.stopPropagation();
                           acknowledgeIncident({
@@ -287,7 +366,7 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
                             action: "ACKNOWLEDGE",
                           });
                         }}
-                        className="px-2.5 py-1 rounded-xl bg-black/5 dark:bg-white/10 text-[#1D1D1F] dark:text-[#F5F5F7] text-[10px] font-semibold hover:bg-black/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="px-2.5 py-1 rounded-xl bg-black/5 dark:bg-white/10 text-[#1D1D1F] dark:text-[#F5F5F7] text-[10px] font-semibold hover:bg-black/10 transition-colors cursor-pointer"
                       >
                         {t("incidentActionAck")}
                       </button>
@@ -296,12 +375,6 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
                     {inc.status !== "RESOLVED" && (
                       <button
                         type="button"
-                        disabled={transportMode !== "FIXTURE_STREAM"}
-                        title={
-                          transportMode !== "FIXTURE_STREAM"
-                            ? "Disabled until Core exposes an authoritative incident action endpoint"
-                            : undefined
-                        }
                         onClick={(e) => {
                           e.stopPropagation();
                           resolveIncident({
@@ -309,7 +382,7 @@ export const IncidentCenter: React.FC<IncidentCenterProps> = ({
                             action: "RESOLVE",
                           });
                         }}
-                        className="px-2.5 py-1 rounded-xl bg-[#34C759]/15 text-[#248A3D] dark:text-[#30D158] border border-[#34C759]/30 text-[10px] font-semibold hover:bg-[#34C759]/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="px-2.5 py-1 rounded-xl bg-[#34C759]/15 text-[#248A3D] dark:text-[#30D158] border border-[#34C759]/30 text-[10px] font-semibold hover:bg-[#34C759]/25 transition-colors cursor-pointer"
                       >
                         {t("incidentActionResolve")}
                       </button>

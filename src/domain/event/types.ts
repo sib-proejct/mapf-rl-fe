@@ -63,6 +63,7 @@ export interface StreamWelcomePayload {
 }
 
 export interface RobotStateReportPayload {
+  trafficWait?: import("../../contracts/provisioning.generated.ts").TrafficWait;
   robotId: string;
   stateVersion: number;
   simulationTimeMs: number;
@@ -102,6 +103,8 @@ export interface OperationsEventPayload {
   entityType:
     | "MAP"
     | "ROBOT"
+    | "QUEUE_TASK"
+    | "BUFFER_STATE"
     | "ORDER"
     | "INCIDENT"
     | "PLAN_REVISION"
@@ -135,6 +138,7 @@ export interface ReconciliationDiagnostics {
 }
 
 export interface ReconciliationState {
+  telemetryStale?: boolean;
   snapshot: AuthoritativeSnapshot | null;
   connectionState: ConnectionState;
   transportMode: StreamTransportMode;

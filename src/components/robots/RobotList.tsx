@@ -1,3 +1,6 @@
+import { bufferLabel } from "../../contracts/adapters/bufferAdapter.ts";
+import { batteryLabel } from "../../utils/battery.ts";
+import { RobotCreateForm } from "./RobotCreateForm.tsx";
 import React, { useState, useMemo, useEffect, useRef, memo } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
@@ -46,6 +49,7 @@ import {
 import { formatShortId, copyToClipboard } from "../../utils/ids/ids.ts";
 import { getNodeTypeUiMeta } from "../../utils/map/topology.ts";
 import type { Robot } from "../../domain/robot/types.ts";
+import { RobotRemoveButton } from "./RobotRemoveButton.tsx";
 
 export interface RobotListProps {
   embedded?: boolean;
@@ -104,6 +108,7 @@ const InlineRobotInspector: React.FC<InlineRobotInspectorProps> = ({
       className="mt-3 pt-3 border-t border-black/[0.06] dark:border-white/[0.08] space-y-2.5 animate-fade-in text-left text-xs"
     >
       {/* 1. Real-time Telemetry Bento */}
+      <RobotRemoveButton key={robot.id} robotId={robot.id} />
       <div className="grid grid-cols-2 gap-2">
         {/* Battery */}
         <div className="bg-[#F5F5F7] dark:bg-[#252528] p-2.5 rounded-xl border border-black/[0.02] dark:border-white/[0.03]">
@@ -113,7 +118,7 @@ const InlineRobotInspector: React.FC<InlineRobotInspectorProps> = ({
               Battery
             </span>
             <span className="font-mono font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
-              {robot.batteryPercent ?? 100}%
+              {robot.batteryPercent?.toFixed(1) ?? "—"}%
             </span>
           </div>
           <div className="w-full h-1.5 bg-black/5 dark:bg-white/10 rounded-full overflow-hidden">
@@ -125,7 +130,7 @@ const InlineRobotInspector: React.FC<InlineRobotInspectorProps> = ({
                     ? "bg-[#FF9500] dark:bg-[#FF9F0A]"
                     : "bg-[#FF3B30] dark:bg-[#FF453A]"
               }`}
-              style={{ width: `${robot.batteryPercent ?? 100}%` }}
+              style={{ width: `${robot.batteryPercent ?? 0}%` }}
             />
           </div>
         </div>
@@ -146,6 +151,13 @@ const InlineRobotInspector: React.FC<InlineRobotInspectorProps> = ({
         </div>
       </div>
 
+      {bufferLabel(robot.bufferState) && (
+        <p className="text-xs text-[#86868B]" aria-live="polite">
+          {bufferLabel(robot.bufferState)}
+          {robot.bufferState?.buffer &&
+            ` · (${robot.bufferState.buffer.column}, ${robot.bufferState.buffer.row})`}
+        </p>
+      )}
       {robot.stationState && (
         <div className="text-xs text-[#86868B]" aria-live="polite">
           {robot.stationState.loaded ? "적재됨" : "비어 있음"} ·{" "}
@@ -252,7 +264,22 @@ interface RobotCardProps {
 
 const RobotCard = memo<RobotCardProps>(
   ({ robot, isSelected, onSelect, onCloseInspector }) => {
+    const { snapshot } = useOperations();
+    const { language } = useAppConfig();
     const getStatusBadge = (r: Robot) => {
+      const label = batteryLabel(
+        r,
+        snapshot?.orders ?? [],
+        snapshot?.batteryPolicy,
+        language,
+      );
+      if (label)
+        return {
+          label,
+          dot: "bg-[#FF9500] dark:bg-[#FF9F0A]",
+          text: "text-[#C93400] dark:text-[#FF9F0A]",
+          bg: "bg-[#FF9500]/10 dark:bg-[#FF9F0A]/15 border-[#FF9500]/20",
+        };
       if (r.connectivity === "DISCONNECTED") {
         return {
           label: "Offline",
@@ -294,24 +321,35 @@ const RobotCard = memo<RobotCardProps>(
     };
 
     const badge = getStatusBadge(robot);
+    const batteryPercent =
+      robot.stationState?.batteryPercent ?? robot.batteryPercent;
 
     return (
       <div
         role="button"
         tabIndex={0}
         data-robot-id={robot.id}
+        aria-label={robot.id}
+        aria-expanded={isSelected}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelect(isSelected ? "" : robot.id);
+          }
+        }}
         onClick={() => onSelect(isSelected ? "" : robot.id)}
-        className={`p-3 sm:p-3.5 rounded-2xl border transition-all cursor-pointer outline-none ${
+        className={`px-3 py-2 rounded-2xl border transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
           isSelected
             ? "bg-[#0071E3]/[0.05] dark:bg-[#2997FF]/10 border-[#0071E3]/50 dark:border-[#2997FF]/60 shadow-xs ring-1 ring-[#0071E3]/20"
             : "bg-white dark:bg-[#1C1C1E] hover:bg-[#F5F5F7]/80 dark:hover:bg-[#252528]/80 border-black/[0.05] dark:border-white/[0.07] hover:border-black/15 dark:hover:border-white/20"
         }`}
       >
         {/* Card Header Row: ID, Badges & Chevron */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <div
-              className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+              className={`w-6 h-6 shrink-0 rounded-lg flex items-center justify-center ${
                 isSelected
                   ? "bg-[#0071E3] text-white"
                   : "bg-black/5 dark:bg-white/10 text-[#1D1D1F] dark:text-[#F5F5F7]"
@@ -319,7 +357,10 @@ const RobotCard = memo<RobotCardProps>(
             >
               <Bot className="w-3.5 h-3.5" />
             </div>
-            <span className="font-mono text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight">
+            <span
+              title={robot.id}
+              className="truncate font-mono text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight"
+            >
               {robot.id}
             </span>
             {robot.connectivity === "DISCONNECTED" && (
@@ -327,9 +368,29 @@ const RobotCard = memo<RobotCardProps>(
             )}
           </div>
 
-          <div className="flex items-center gap-1.5">
+          {!isSelected && (
+            <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-[10px] text-[#86868B]">
+              <span
+                className="flex shrink-0 items-center gap-1 font-mono tabular-nums"
+                title={language === "ko" ? "배터리" : "Battery"}
+              >
+                <Battery className="w-3.5 h-3.5 text-[#34C759] dark:text-[#30D158]" />
+                {batteryPercent === undefined
+                  ? "—"
+                  : `${batteryPercent.toFixed(1)}%`}
+              </span>
+              <span
+                className="flex min-w-0 items-center gap-1 font-mono"
+                title={language === "ko" ? "위치 (m)" : "Position (m)"}
+              >
+                <MapPin className="w-3 h-3 text-[#0071E3] dark:text-[#2997FF]" />
+                {formatCoordinates(robot.pose.xMeters, robot.pose.yMeters)}
+              </span>
+            </div>
+          )}
+          <div className="flex shrink-0 items-center gap-1.5">
             <div
-              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${badge.bg} ${badge.text}`}
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold whitespace-nowrap ${badge.bg} ${badge.text}`}
             >
               <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
               <span>{badge.label}</span>
@@ -343,41 +404,6 @@ const RobotCard = memo<RobotCardProps>(
             </div>
           </div>
         </div>
-
-        {/* Card Middle Row: Coordinates & Heading (when collapsed) */}
-        {!isSelected && (
-          <div className="grid grid-cols-2 gap-1.5 mt-2 text-[10.5px]">
-            <div className="bg-[#F5F5F7] dark:bg-[#252528] px-2 py-1 rounded-xl flex items-center gap-1.5 border border-black/[0.02] dark:border-white/[0.03]">
-              <MapPin className="w-3 h-3 text-[#0071E3] dark:text-[#2997FF] shrink-0" />
-              <span className="font-mono text-[10px] text-[#1D1D1F] dark:text-[#F5F5F7] font-semibold truncate">
-                {formatCoordinates(robot.pose.xMeters, robot.pose.yMeters)}
-              </span>
-            </div>
-
-            <div className="bg-[#F5F5F7] dark:bg-[#252528] px-2 py-1 rounded-xl flex items-center gap-1.5 border border-black/[0.02] dark:border-white/[0.03]">
-              <Compass className="w-3 h-3 text-[#86868B] shrink-0" />
-              <span className="font-mono text-[10px] text-[#86868B] truncate">
-                {yawToDegrees(robot.pose.yawRadians)}°
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Card Bottom Row: Assigned Order info (when collapsed) */}
-        {!isSelected && (
-          <div className="flex items-center justify-between text-[10px] text-[#86868B] pt-1.5 mt-1.5 border-t border-black/[0.03] dark:border-white/[0.05]">
-            {robot.currentOrderId ? (
-              <span className="text-[#0071E3] dark:text-[#2997FF] font-mono font-semibold truncate">
-                Order: {robot.currentOrderId}
-              </span>
-            ) : (
-              <span className="text-[#86868B]">No active order</span>
-            )}
-            <span className="font-mono tabular-nums">
-              {formatStateAge(robot.occurredAtUtc)}
-            </span>
-          </div>
-        )}
 
         {/* Accordion Expanded Inline Inspector */}
         {isSelected && (
@@ -531,6 +557,8 @@ export const RobotList: React.FC<RobotListProps> = ({ embedded = false }) => {
           </div>
         </div>
       )}
+
+      <RobotCreateForm />
 
       {/* Search Input with Apple Pill Design */}
       <div className="relative mb-2.5 shrink-0">

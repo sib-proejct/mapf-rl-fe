@@ -1,3 +1,4 @@
+import { TelemetryClient } from "../../services/websocket/telemetryClient.ts";
 import { isNodeCommandTransportReady } from "../../domain/order/nodeCommand.ts";
 import React, {
   createContext,
@@ -35,7 +36,11 @@ import {
   normalizeProblem,
 } from "../../contracts/adapters/problem.ts";
 import { adaptOperationsSnapshot } from "../../contracts/adapters/snapshotAdapter.ts";
-import { defaultApiClient, ProblemError } from "../../services/api/client.ts";
+import {
+  defaultApiClient,
+  ProblemError,
+  queueOrderInput,
+} from "../../services/api/client.ts";
 import {
   CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
   CANONICAL_STALE_SNAPSHOT_FIXTURE,
@@ -50,6 +55,7 @@ import {
 import { MEGA_WAREHOUSE_MAP_FIXTURE } from "../../contracts/fixtures/largeWarehouseMap.ts";
 import {
   reconciliationReducer,
+  selectReconciliationView,
   INITIAL_RECONCILIATION_STATE,
 } from "../../state/reconciliation/reducer.ts";
 import { BoundedEventBuffer } from "../../state/reconciliation/boundedBuffer.ts";
@@ -111,6 +117,11 @@ export interface OperationsContextType {
   selectedIncident: Incident | null;
   selectedNodeId: number | null;
   setSelectedNodeId: (id: number | null) => void;
+  robotPlacementActive: boolean;
+  setRobotPlacementActive: (active: boolean) => void;
+  robotPlacementNodeIds: number[];
+  setRobotPlacementNodeIds: (ids: number[]) => void;
+  robotPlacementClick: React.MutableRefObject<((id: number) => void) | null>;
   selectedNode: MapNode | null;
   topology: MapTopology | null;
 
@@ -141,6 +152,7 @@ export interface OperationsContextType {
     req: CreateOrderInput,
     options?: { timeoutMs?: number },
   ) => Promise<PendingMutation>;
+  cancelQueueTask: (taskId: string) => Promise<PendingMutation>;
   cancelOrder: (
     req: CancelOrderRequest,
     options?: { timeoutMs?: number },
@@ -180,9 +192,13 @@ const OperationsContext = createContext<OperationsContextType | undefined>(
 export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [reconState, dispatch] = useReducer(
+  const [durableState, dispatch] = useReducer(
     reconciliationReducer,
     INITIAL_RECONCILIATION_STATE,
+  );
+  const reconState = useMemo(
+    () => selectReconciliationView(durableState),
+    [durableState],
   );
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -198,6 +214,15 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
     null,
   );
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
+  const [robotPlacementActive, setRobotPlacementActive] = useState(false);
+  const [robotPlacementNodeIds, setRobotPlacementNodeIds] = useState<number[]>(
+    [],
+  );
+  const robotPlacementClick = useRef<((id: number) => void) | null>(null);
+  const selectNode = (id: number | null) => {
+    setSelectedNodeId(id);
+    if (id !== null) robotPlacementClick.current?.(id);
+  };
 
   // Modals & Drawers
   const [isOrderModalOpen, setIsOrderModalOpen] = useState<boolean>(false);
@@ -270,98 +295,112 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
     eventBatchQueueRef.current.push(event);
   }, []);
 
+  const inFlightSnapshotRef = useRef(false);
+  const lastSnapshotLoadedAtRef = useRef<number>(0);
+
   /**
    * Loads an authoritative REST snapshot from Core or Canonical Fixture.
    */
-  const loadSnapshot = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadSnapshot = useCallback(
+    async (forced: boolean = false) => {
+      const now = Date.now();
+      if (inFlightSnapshotRef.current) return;
+      if (!forced && now - lastSnapshotLoadedAtRef.current < 500) return;
+      inFlightSnapshotRef.current = true;
+      setLoading(true);
+      setError(null);
 
-    try {
-      let snapshotData: AuthoritativeSnapshot;
+      try {
+        let snapshotData: AuthoritativeSnapshot;
 
-      if (transportMode === "FIXTURE_STREAM") {
-        eventBatchQueueRef.current = [];
-        boundedBufferRef.current.clear();
-        resetRobotMotionCache();
+        if (transportMode === "FIXTURE_STREAM") {
+          eventBatchQueueRef.current = [];
+          boundedBufferRef.current.clear();
+          resetRobotMotionCache();
 
-        if (fixtureMode === "error") {
-          const prob = normalizeProblem(CANONICAL_PROBLEM_FIXTURE);
-          setError(prob);
-          setLoading(false);
-          return;
-        } else if (fixtureMode === "stale") {
-          snapshotData = adaptOperationsSnapshot(
-            CANONICAL_STALE_SNAPSHOT_FIXTURE,
-          );
-        } else if (fixtureMode === "partial") {
-          snapshotData = adaptOperationsSnapshot(
-            CANONICAL_PARTIAL_SNAPSHOT_FIXTURE,
-          );
-        } else if (fixtureMode === "disconnected") {
-          snapshotData = adaptOperationsSnapshot(
-            CANONICAL_DISCONNECTED_SNAPSHOT_FIXTURE,
-          );
-        } else {
-          if (fleetScale > 4) {
-            snapshotData = generateStressSnapshot(
-              fleetScale,
-              MEGA_WAREHOUSE_MAP_FIXTURE,
+          if (fixtureMode === "error") {
+            const prob = normalizeProblem(CANONICAL_PROBLEM_FIXTURE);
+            setError(prob);
+            setLoading(false);
+            return;
+          } else if (fixtureMode === "stale") {
+            snapshotData = adaptOperationsSnapshot(
+              CANONICAL_STALE_SNAPSHOT_FIXTURE,
             );
-            setSelectedRobotId((prev) =>
-              prev && prev.startsWith("robot-") ? prev : "robot-001",
+          } else if (fixtureMode === "partial") {
+            snapshotData = adaptOperationsSnapshot(
+              CANONICAL_PARTIAL_SNAPSHOT_FIXTURE,
+            );
+          } else if (fixtureMode === "disconnected") {
+            snapshotData = adaptOperationsSnapshot(
+              CANONICAL_DISCONNECTED_SNAPSHOT_FIXTURE,
             );
           } else {
-            snapshotData = adaptOperationsSnapshot(
-              CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
-            );
-            setSelectedRobotId((prev) =>
-              prev && prev.startsWith("robot-") && !prev.startsWith("robot-00")
-                ? prev
-                : "robot-01",
-            );
+            if (fleetScale > 4) {
+              snapshotData = generateStressSnapshot(
+                fleetScale,
+                MEGA_WAREHOUSE_MAP_FIXTURE,
+              );
+              setSelectedRobotId((prev) =>
+                prev && prev.startsWith("robot-") ? prev : "robot-001",
+              );
+            } else {
+              snapshotData = adaptOperationsSnapshot(
+                CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
+              );
+              setSelectedRobotId((prev) =>
+                prev &&
+                prev.startsWith("robot-") &&
+                !prev.startsWith("robot-00")
+                  ? prev
+                  : "robot-01",
+              );
+            }
           }
+        } else {
+          // Live REST fetch
+          const raw = await defaultApiClient.fetchOperationsSnapshot();
+          snapshotData = adaptOperationsSnapshot(raw);
         }
-      } else {
-        // Live REST fetch
-        const raw = await defaultApiClient.fetchOperationsSnapshot();
-        snapshotData = adaptOperationsSnapshot(raw);
+
+        eventBatchQueueRef.current = [];
+        // Atomically replace snapshot in state and replay buffered events
+        const buffered =
+          transportMode === "FIXTURE_STREAM"
+            ? []
+            : boundedBufferRef.current.getEventsAfter(
+                snapshotData.cursor.eventSequence,
+              );
+        boundedBufferRef.current.trimBefore(snapshotData.cursor.eventSequence);
+
+        dispatch({
+          type: "SNAPSHOT_REPLACED",
+          snapshot: snapshotData,
+          bufferedEvents: buffered,
+        });
+
+        // Reconcile any in-flight/uncertain mutations against fresh snapshot
+        globalMutationManager.reconcileWithSnapshot(snapshotData);
+
+        lastSnapshotLoadedAtRef.current = Date.now();
+        setLastFetchedAt(new Date());
+      } catch (err: unknown) {
+        dispatch({ type: "SNAPSHOT_LOAD_FAILED" });
+        if (err instanceof ProblemError) {
+          setError(err.problem);
+        } else {
+          setError(normalizeProblem(err));
+        }
+      } finally {
+        inFlightSnapshotRef.current = false;
+        setLoading(false);
       }
-
-      eventBatchQueueRef.current = [];
-      // Atomically replace snapshot in state and replay buffered events
-      const buffered =
-        transportMode === "FIXTURE_STREAM"
-          ? []
-          : boundedBufferRef.current.getEventsAfter(
-              snapshotData.cursor.eventSequence,
-            );
-      boundedBufferRef.current.trimBefore(snapshotData.cursor.eventSequence);
-
-      dispatch({
-        type: "SNAPSHOT_REPLACED",
-        snapshot: snapshotData,
-        bufferedEvents: buffered,
-      });
-
-      // Reconcile any in-flight/uncertain mutations against fresh snapshot
-      globalMutationManager.reconcileWithSnapshot(snapshotData);
-
-      setLastFetchedAt(new Date());
-    } catch (err: unknown) {
-      dispatch({ type: "SNAPSHOT_LOAD_FAILED" });
-      if (err instanceof ProblemError) {
-        setError(err.problem);
-      } else {
-        setError(normalizeProblem(err));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [transportMode, fixtureMode, fleetScale]);
+    },
+    [transportMode, fixtureMode, fleetScale],
+  );
 
   const refreshSnapshot = useCallback(async () => {
-    await loadSnapshot();
+    await loadSnapshot(true);
   }, [loadSnapshot]);
 
   // Initial Snapshot load
@@ -424,6 +463,13 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
     handleInboundEvent,
   ]);
 
+  // Keep loadSnapshot and handleInboundEvent stable across re-renders for network sockets
+  const loadSnapshotRef = useRef(loadSnapshot);
+  loadSnapshotRef.current = loadSnapshot;
+
+  const handleInboundEventRef = useRef(handleInboundEvent);
+  handleInboundEventRef.current = handleInboundEvent;
+
   // Setup WebSocket Client for LIVE_WEBSOCKET mode
   useEffect(() => {
     if (transportMode !== "LIVE_WEBSOCKET") {
@@ -436,11 +482,11 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const ws = new CoreWsClient({
       onConnected: () => {
-        loadSnapshot();
+        loadSnapshotRef.current();
       },
       onMessage: (envelope) => {
         boundedBufferRef.current.push(envelope);
-        handleInboundEvent(envelope);
+        handleInboundEventRef.current(envelope);
       },
       onStateChange: (state) => {
         dispatch({ type: "CONNECTION_STATE_CHANGED", connectionState: state });
@@ -452,12 +498,22 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
     wsClientRef.current = ws;
     ws.connect();
+    const telemetry = new TelemetryClient({
+      onState: (robotId, data) =>
+        dispatch({ type: "TELEMETRY_RECEIVED", robotId, data }),
+      onReady: () => {
+        void loadSnapshotRef.current();
+      },
+      onStale: () => dispatch({ type: "TELEMETRY_STALE" }),
+    });
+    void telemetry.start();
 
     return () => {
+      telemetry.stop();
       ws.disconnect();
       wsClientRef.current = null;
     };
-  }, [transportMode, handleInboundEvent, loadSnapshot]);
+  }, [transportMode]);
 
   // Setup 5s Polling Fallback for POLLING_FALLBACK mode
   useEffect(() => {
@@ -551,15 +607,20 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       ) {
         throw new Error("기존 주문의 응답을 먼저 확인하세요.");
       }
+      if (transportMode === "FIXTURE_STREAM" && !("assignments" in req)) {
+        throw new Error("자동 배차는 Live에서 사용할 수 있습니다.");
+      }
       const mut = globalMutationManager.startMutation(
         "CREATE_ORDER",
-        req as unknown as Record<string, unknown>,
+        (transportMode === "FIXTURE_STREAM"
+          ? req
+          : queueOrderInput(req)) as unknown as Record<string, unknown>,
         undefined,
         undefined,
         options?.forcedRequestId,
       );
 
-      if (transportMode === "FIXTURE_STREAM") {
+      if (transportMode === "FIXTURE_STREAM" && "assignments" in req) {
         const orderId = `order-${Date.now().toString().slice(-4)}`;
         const nowIso = new Date().toISOString();
         const newOrder: Order = {
@@ -602,7 +663,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // Live REST execution
       try {
-        const outcome = await defaultApiClient.createOrder(req, {
+        const outcome = await defaultApiClient.enqueueOrder(req, {
           requestId: mut.requestId,
           timeoutMs: options?.timeoutMs || 8000,
         });
@@ -684,6 +745,50 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       return globalMutationManager.get(mut.requestId)!;
     },
     [transportMode, loadSnapshot],
+  );
+
+  const cancelQueueTask = useCallback(
+    async (
+      taskId: string,
+      options?: { forcedRequestId?: string },
+    ): Promise<PendingMutation> => {
+      const existing = globalMutationManager
+        .getAll()
+        .find(
+          (mutation) =>
+            mutation.operation === "CANCEL_QUEUE_TASK" &&
+            mutation.targetEntityId === taskId &&
+            ["submitting", "uncertain"].includes(mutation.state),
+        );
+      if (existing?.state === "submitting") return existing;
+      const mut = globalMutationManager.startMutation(
+        "CANCEL_QUEUE_TASK",
+        { taskId },
+        taskId,
+        undefined,
+        options?.forcedRequestId ?? existing?.requestId,
+      );
+      try {
+        const outcome = await defaultApiClient.cancelQueueTask(taskId, {
+          requestId: mut.requestId,
+          timeoutMs: 8000,
+        });
+        globalMutationManager.confirmMutation(mut.requestId, outcome);
+        await loadSnapshot();
+      } catch (err) {
+        if (
+          err instanceof ProblemError &&
+          err.problem.code === "MUTATION_TIMEOUT_UNCERTAIN"
+        )
+          globalMutationManager.markUncertain(
+            mut.requestId,
+            err.problem.detail,
+          );
+        else globalMutationManager.rejectMutation(mut.requestId, err);
+      }
+      return globalMutationManager.get(mut.requestId)!;
+    },
+    [loadSnapshot],
   );
 
   const reassignOrder = useCallback(
@@ -914,6 +1019,10 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         return createOrder(existing.payload as unknown as CreateOrderInput, {
           forcedRequestId: requestId,
         });
+      } else if (existing.operation === "CANCEL_QUEUE_TASK") {
+        return cancelQueueTask(String(existing.payload.taskId), {
+          forcedRequestId: requestId,
+        });
       } else if (existing.operation === "CANCEL_ORDER") {
         return cancelOrder(existing.payload as unknown as CancelOrderRequest, {
           forcedRequestId: requestId,
@@ -935,7 +1044,13 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       return existing;
     },
-    [createOrder, cancelOrder, reassignOrder, sendInstantAction],
+    [
+      createOrder,
+      cancelOrder,
+      cancelQueueTask,
+      reassignOrder,
+      sendInstantAction,
+    ],
   );
 
   const dismissMutation = useCallback((requestId: string) => {
@@ -1036,8 +1151,8 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   }, []);
   const clickNode = async (nodeId: number) => {
-    setSelectedNodeId(nodeId);
-    if (!selectedRobotId) return;
+    selectNode(nodeId);
+    if (robotPlacementActive || !selectedRobotId) return;
     if (nodeSubmitting.current) return;
     setNodeConfirmation({ robotId: selectedRobotId, nodeId });
   };
@@ -1071,29 +1186,13 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
     if (
-      robot.connectivity !== "CONNECTED" ||
-      robot.operationalState !== "IDLE" ||
-      robot.safety !== "NORMAL" ||
-      robot.freshness !== "CURRENT" ||
       !isNodeCommandTransportReady(
         transportMode,
         reconState.connectionState,
         wsClientRef.current?.isConnected ?? false,
       )
     ) {
-      reject("연결된 안전 상태의 유휴 로봇만 이동할 수 있습니다.");
-      return;
-    }
-    if (
-      visibleSnapshot?.orders.some(
-        (order) =>
-          !["Completed", "Cancelled", "Rejected"].includes(order.state) &&
-          order.assignments.some(
-            (assignment) => assignment.robotId === robot.id,
-          ),
-      )
-    ) {
-      reject("이 로봇은 이미 작업 중입니다.");
+      reject("Core 연결을 확인한 뒤 큐에 등록하세요.");
       return;
     }
     if (!node.isTraversable) {
@@ -1120,18 +1219,6 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
           : station?.type === "charger"
             ? ("CHARGE" as const)
             : undefined;
-    if (arrivalAction && robot.stationActionsVersion !== "1.1.0") {
-      reject("이 로봇은 적재·하역·충전 작업을 지원하지 않습니다.");
-      return;
-    }
-    if (arrivalAction === "PICK" && robot.stationState?.loaded !== false) {
-      reject("빈 로봇만 pick 작업을 할 수 있습니다.");
-      return;
-    }
-    if (arrivalAction === "PLACE" && robot.stationState?.loaded !== true) {
-      reject("적재된 로봇만 place 작업을 할 수 있습니다.");
-      return;
-    }
     nodeSubmitting.current = true;
     setNodeCommand({ ...status, state: "submitting" });
     try {
@@ -1239,7 +1326,12 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         setSelectedIncidentId,
         selectedIncident,
         selectedNodeId,
-        setSelectedNodeId,
+        setSelectedNodeId: selectNode,
+        robotPlacementActive,
+        setRobotPlacementActive,
+        robotPlacementNodeIds,
+        setRobotPlacementNodeIds,
+        robotPlacementClick,
         selectedNode,
         topology,
         fleetScale,
@@ -1262,6 +1354,7 @@ export const OperationsProvider: React.FC<{ children: React.ReactNode }> = ({
         pendingMutations,
         createOrder,
         cancelOrder,
+        cancelQueueTask,
         reassignOrder,
         sendInstantAction,
         acknowledgeIncident,

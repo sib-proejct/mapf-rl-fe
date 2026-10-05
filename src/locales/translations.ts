@@ -2,6 +2,22 @@ export type Language = "ko" | "en";
 
 export const translations = {
   ko: {
+    robotAdd: "로봇 추가",
+    robotAddColumn: "시작 열 (column)",
+    robotAddRow: "시작 행 (row)",
+    robotAddSelect: "좌표를 입력하거나 지도에서 시작 셀을 선택하세요.",
+    robotAddUnavailable: "Live runtime 연결 후 로봇을 추가할 수 있습니다.",
+    robotAddInvalid: "지도 안의 통행 가능한 셀을 선택하세요.",
+    robotAddSubmit: "추가 및 연결",
+    robotAddPending: "로봇을 등록했습니다. 연결을 기다리고 있습니다.",
+    robotAddReady: "로봇이 연결되었습니다.",
+    robotAddFailed: "로봇 실행에 실패했습니다.",
+    robotAddUncertain:
+      "응답을 확인하지 못했습니다. 같은 요청으로 다시 시도하세요.",
+    robotAddRetry: "다시 시도",
+    robotAddClose: "닫기",
+    robotAddPollError:
+      "연결 상태를 조회하지 못했습니다. 자동으로 다시 조회합니다.",
     // Navigation
     navOperations: "운영 (Operations)",
     navOrders: "작업 (Orders)",
@@ -200,7 +216,7 @@ export const translations = {
     noActiveOrder: "배정된 작업 없음 (유휴 상태)",
 
     // Robot List
-    robotListTitle: "로봇 함대",
+    robotListTitle: "로봇 목록",
     robotSearchPlaceholder: "로봇 ID 검색...",
     robotFilterAll: "전체",
     robotFilterExecuting: "실행 중",
@@ -210,10 +226,17 @@ export const translations = {
     robotNoResults: "검색 조건과 일치하는 로봇이 없습니다.",
 
     // Order List
-    orderListTitle: "작업 큐",
+    orderListTitle: "오더 목록",
     orderAssignments: "배정 목표",
     orderGoalCoordinates: "목표 좌표",
     orderNoOrders: "현재 활성화된 작업이 없습니다.",
+    orderFilterActive: "진행 중",
+    orderFilterHistory: "완료·취소",
+    orderFilterAll: "전체",
+    orderClearHistory: "완료 내역 비우기",
+    orderClearHistoryConfirm:
+      "화면에 표시된 완료 및 취소 이력을 비우시겠습니까?",
+    orderNewTransport: "운반 / 웨이브",
 
     // State Views
     loadingTitle: "권위 스냅샷을 불러오는 중입니다...",
@@ -289,8 +312,8 @@ export const translations = {
     orderPriorityCritical: "긴급 (Critical)",
     orderNotes: "운영 메모",
     orderNotesPlaceholder: "작업 관련 특이사항이나 전달 메시지를 입력하세요...",
-    orderCreateSubmit: "배정 작업 제출",
-    orderCreating: "UUIDv4 requestId 발급 및 제출 중...",
+    orderCreateSubmit: "큐에 작업 등록",
+    orderCreating: "작업 등록 중...",
     orderCreatedSuccess: "작업이 성공적으로 제출되었습니다.",
     orderCreateNotice:
       "클라이언트에서 생성된 고유 UUIDv4 requestId로 멱등 제출되며, 중복 클릭이 방지됩니다.",
@@ -354,6 +377,9 @@ export const translations = {
     incidentActionAck: "인시던트 확인 (Acknowledge)",
     incidentActionResolve: "인시던트 해결 (Resolve)",
     incidentActionClearEstop: "안전 해제 (Clear Stop)",
+    incidentClearHistory: "인시던트 내역 비우기",
+    incidentClearHistoryConfirm:
+      "모든 인시던트 내역(활성/해결 포함)을 화면 목록에서 비우시겠습니까?",
     incidentPersistentNotice:
       "알림 띠를 닫아도 인시던트는 사라지지 않으며, 영구 관제 센터에서 추적 및 복구됩니다.",
     incidentNoActive:
@@ -364,6 +390,20 @@ export const translations = {
     footerDocs: "설계 문서",
   },
   en: {
+    robotAdd: "Add robot",
+    robotAddColumn: "Start column",
+    robotAddRow: "Start row",
+    robotAddSelect: "Enter coordinates or select a start cell on the map.",
+    robotAddUnavailable: "Connect the Live runtime to add robots.",
+    robotAddInvalid: "Select a traversable cell within the map.",
+    robotAddSubmit: "Add and connect",
+    robotAddPending: "Robot registered. Waiting for connection.",
+    robotAddReady: "Robot connected.",
+    robotAddFailed: "Robot failed to start.",
+    robotAddUncertain: "Response unconfirmed. Retry with the same request.",
+    robotAddRetry: "Retry",
+    robotAddClose: "Close",
+    robotAddPollError: "Unable to check connection. Retrying automatically.",
     // Navigation
     navOperations: "Operations",
     navOrders: "Orders",
@@ -561,7 +601,7 @@ export const translations = {
     noActiveOrder: "No active order assigned (Idle)",
 
     // Robot List
-    robotListTitle: "Fleet Robots",
+    robotListTitle: "Robot List",
     robotSearchPlaceholder: "Search Robot ID...",
     robotFilterAll: "All",
     robotFilterExecuting: "Executing",
@@ -571,10 +611,17 @@ export const translations = {
     robotNoResults: "No robots match the selected filter.",
 
     // Order List
-    orderListTitle: "Order Queue",
+    orderListTitle: "Order List",
     orderAssignments: "Target Assignments",
     orderGoalCoordinates: "Goal Coordinates",
     orderNoOrders: "No active dispatch orders in flight.",
+    orderFilterActive: "Active",
+    orderFilterHistory: "History",
+    orderFilterAll: "All",
+    orderClearHistory: "Clear History",
+    orderClearHistoryConfirm:
+      "Clear completed and cancelled orders from the screen?",
+    orderNewTransport: "Transport / Wave",
 
     // State Views
     loadingTitle: "Loading Authoritative Snapshot...",
@@ -649,8 +696,8 @@ export const translations = {
     orderPriorityCritical: "Critical",
     orderNotes: "Operator Notes",
     orderNotesPlaceholder: "Add optional instructions or context...",
-    orderCreateSubmit: "Dispatch Order",
-    orderCreating: "Submitting with UUIDv4 requestId...",
+    orderCreateSubmit: "Queue Order",
+    orderCreating: "Queuing order...",
     orderCreatedSuccess: "Order dispatched successfully.",
     orderCreateNotice:
       "Submitted with client UUIDv4 requestId for idempotent delivery; double-clicks are prevented.",
@@ -714,6 +761,9 @@ export const translations = {
     incidentActionAck: "Acknowledge",
     incidentActionResolve: "Resolve Incident",
     incidentActionClearEstop: "Clear Stop",
+    incidentClearHistory: "Clear Incident History",
+    incidentClearHistoryConfirm:
+      "Are you sure you want to clear all incidents from the list?",
     incidentPersistentNotice:
       "Dismissing alert banners does not dismiss incidents. All events are tracked persistently here.",
     incidentNoActive: "No active incidents. All systems nominal.",

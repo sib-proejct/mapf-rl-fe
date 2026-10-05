@@ -489,6 +489,9 @@ export function deriveMapTopology(map: RasterMap): MapTopology {
       const station = map.stationCatalog?.find(
         (station) => station.column === col && station.row === row,
       );
+      const buffer = map.bufferCatalog?.buffers.find(
+        (b) => b.column === col && b.row === row,
+      );
       const inferred = classifyNodeType(
         col,
         row,
@@ -498,17 +501,28 @@ export function deriveMapTopology(map: RasterMap): MapTopology {
       );
 
       const { type, name, zone, isTraversableOverride } =
-        map.stationCatalog !== undefined
+        map.stationCatalog !== undefined || map.bufferCatalog !== undefined
           ? {
               ...inferred,
               type:
-                station?.type ??
-                (["pick", "place", "charger"].includes(inferred.type)
+                (buffer ? ("buffer" as const) : station?.type) ??
+                ([
+                  "pick",
+                  "place",
+                  "charger",
+                  ...(map.bufferCatalog ? ["buffer"] : []),
+                ].includes(inferred.type)
                   ? ("waypoint" as const)
                   : inferred.type),
               name:
+                buffer?.name ??
                 station?.name ??
-                (["pick", "place", "charger"].includes(inferred.type)
+                ([
+                  "pick",
+                  "place",
+                  "charger",
+                  ...(map.bufferCatalog ? ["buffer"] : []),
+                ].includes(inferred.type)
                   ? `Node #${id}`
                   : inferred.name),
               isTraversableOverride: !isRawBlocked,

@@ -5,6 +5,10 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scrollbar-gutter: stable;
+  }
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "SF Pro Text",
       "Inter", "Nanum Gothic", sans-serif;

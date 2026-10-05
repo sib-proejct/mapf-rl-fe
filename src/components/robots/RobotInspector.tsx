@@ -1,3 +1,6 @@
+import { bufferLabel } from "../../contracts/adapters/bufferAdapter.ts";
+import { batteryLabel } from "../../utils/battery.ts";
+import { RobotRemoveButton } from "./RobotRemoveButton.tsx";
 import React, { useState, useEffect } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { useOperations } from "../../app/providers/OperationsContext.tsx";
@@ -101,6 +104,13 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
         );
       });
 
+      const bufferOwner = robots.find(
+        (r) =>
+          r.bufferState?.mapId === map?.mapId &&
+          r.bufferState?.mapRevision === map?.revision &&
+          r.bufferState?.buffer?.column === selectedNode.column &&
+          r.bufferState?.buffer?.row === selectedNode.row,
+      );
       let assignedGoal: { robotId: string; orderId: string } | null = null;
       for (const order of orders) {
         const match = order.assignments.find(
@@ -258,6 +268,17 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
               </div>
             </div>
 
+            {bufferOwner && (
+              <div
+                className="p-3 rounded-xl bg-violet-500/10 text-xs"
+                aria-live="polite"
+              >
+                {bufferOwner.bufferState?.bufferOccupied
+                  ? "버퍼 점유"
+                  : "버퍼 예약"}
+                : {bufferOwner.id}
+              </div>
+            )}
             {/* Occupying Robot */}
             {occupyingRobot ? (
               <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
@@ -268,8 +289,8 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
                       Occupant: {occupyingRobot.id}
                     </span>
                     <span className="text-[10px] text-[#86868B]">
-                      Battery {occupyingRobot.batteryPercent}% ·{" "}
-                      {occupyingRobot.operationalState}
+                      Battery {occupyingRobot.batteryPercent?.toFixed(1) ?? "—"}
+                      % · {occupyingRobot.operationalState}
                     </span>
                   </div>
                 </div>
@@ -458,6 +479,7 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
       }
     >
       {/* 1. Header: Robot ID & Actions */}
+      <RobotRemoveButton key={selectedRobot.id} robotId={selectedRobot.id} />
       <div className="flex items-center justify-between border-b border-black/[0.04] dark:border-white/[0.06] pb-3 shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-[#0071E3]/15 text-[#0071E3] dark:text-[#2997FF] flex items-center justify-center">
@@ -570,12 +592,30 @@ export const RobotInspector: React.FC<RobotInspectorProps> = ({
         </div>
       </div>
 
+      {bufferLabel(selectedRobot.bufferState) && (
+        <p className="text-xs text-[#86868B]" aria-live="polite">
+          {bufferLabel(selectedRobot.bufferState)}
+          {selectedRobot.bufferState?.buffer &&
+            ` · (${selectedRobot.bufferState.buffer.column}, ${selectedRobot.bufferState.buffer.row})`}
+        </p>
+      )}
+      {selectedRobot.trafficWait && (
+        <p className="text-xs text-[#86868B]" aria-live="polite">
+          통행 대기 · {selectedRobot.trafficWait.blockingRobotIds.join(", ")}{" "}
+          통과 후 자동 재개
+        </p>
+      )}
       {selectedRobot.stationState && (
         <div className="p-3 rounded-xl bg-[#F5F5F7] dark:bg-[#252528] text-xs space-y-1 text-[#1D1D1F] dark:text-[#F5F5F7]">
           <p>
             {selectedRobot.stationState.loaded ? "적재됨" : "빈 로봇"} ·{" "}
             {selectedRobot.stationState.batteryPercent.toFixed(1)}%
           </p>
+          {batteryLabel(selectedRobot, orders, snapshot?.batteryPolicy) && (
+            <p>
+              {batteryLabel(selectedRobot, orders, snapshot?.batteryPolicy)}
+            </p>
+          )}
           {selectedRobot.stationState.action && (
             <p>
               {selectedRobot.stationState.action} ·{" "}

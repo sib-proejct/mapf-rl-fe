@@ -1,13 +1,32 @@
+import { adaptMotionProfiles } from "../../contracts/adapters/motionProfile.ts";
+import type {
+  MotionProfilesOutcome,
+  SetMotionProfilesRequest,
+} from "../../contracts/provisioning.generated.ts";
+import type { CreateOrderInput } from "../../domain/mutation/types.ts";
 import { normalizeProblem } from "../../contracts/adapters/problem.ts";
 import type { NormalizedProblem } from "../../contracts/adapters/problem.ts";
 import type {
-  CreateOrderRequest,
   CancelOrderRequest,
   ReassignOrderRequest,
   InstantActionRequest,
   IncidentActionRequest,
   MutationOutcome,
 } from "../../domain/mutation/types.ts";
+
+import type {
+  CreateRobotRequest,
+  RetryRobotRequest,
+  ProvisioningOutcome,
+  ProvisioningCapabilities,
+  RemoveRobotRequest,
+  RobotRemovalOutcome,
+} from "../../contracts/provisioning.generated.ts";
+import {
+  adaptProvisioningOutcome,
+  adaptProvisioningCapabilities,
+  adaptRobotRemovalOutcome,
+} from "../../contracts/adapters/provisioning.ts";
 
 export class ProblemError extends Error {
   readonly problem: NormalizedProblem;
@@ -50,6 +69,57 @@ function browserCsrfToken(): string | null {
   return cookie ? decodeURIComponent(cookie.slice("mapf_csrf=".length)) : null;
 }
 
+/** Normalize operator input before recording or sending an immutable queue intent. */
+export function queueOrderInput(
+  payload: CreateOrderInput,
+):
+  | Omit<
+      import("../../contracts/queue.generated.ts").CreateQueueTaskRequest,
+      "requestId"
+    >
+  | Omit<
+      import("../../contracts/queue.generated.ts").CreateWaveRequest,
+      "requestId"
+    > {
+  if ("tasks" in payload)
+    return {
+      mapId: payload.mapId,
+      mapRevision: payload.mapRevision,
+      tasks: payload.tasks,
+    };
+  if ("assignments" in payload && payload.assignments.length !== 1)
+    throw new Error("Queue submission requires one robot assignment");
+  const task =
+    "task" in payload
+      ? payload.task
+      : "assignments" in payload
+        ? {
+            robotId: payload.assignments[0].robotId,
+            steps: [payload.assignments[0]],
+          }
+        : {
+            steps: [
+              {
+                goalColumn: payload.goalColumn,
+                goalRow: payload.goalRow,
+                ...(payload.arrivalAction
+                  ? { arrivalAction: payload.arrivalAction }
+                  : {}),
+              },
+            ],
+          };
+  const steps = task.steps.map(({ goalColumn, goalRow, arrivalAction }) => ({
+    goalColumn,
+    goalRow,
+    ...(arrivalAction ? { arrivalAction } : {}),
+  }));
+  return {
+    mapId: payload.mapId,
+    mapRevision: payload.mapRevision,
+    task: { ...task, steps },
+  };
+}
+
 /**
  * Versioned REST API client for MAPF-RL Core /api/v1.
  * Uses same-origin BFF and HttpOnly session cookies.
@@ -73,7 +143,14 @@ export class CoreApiClient {
   async fetchOperationsSnapshot(
     options: FetchSnapshotOptions = {},
   ): Promise<unknown> {
-    const url = `${this.baseUrl}/api/v1/operations/snapshot`;
+    return this.getJson("/api/v1/operations/snapshot", options);
+  }
+
+  private async getJson(
+    path: string,
+    options: FetchSnapshotOptions = {},
+  ): Promise<unknown> {
+    const url = `${this.baseUrl}${path}`;
     const headers: Record<string, string> = {
       Accept: "application/json, application/problem+json",
     };
@@ -115,16 +192,133 @@ export class CoreApiClient {
     }
   }
 
+  async motionProfiles(
+    options: FetchSnapshotOptions = {},
+  ): Promise<MotionProfilesOutcome> {
+    return adaptMotionProfiles(
+      await this.getJson("/api/v1/motion-profiles", options),
+    );
+  }
+
+  async saveMotionProfiles(
+    command: SetMotionProfilesRequest,
+  ): Promise<MotionProfilesOutcome> {
+    const outcome = await this.postMutation(
+      `${this.baseUrl}/api/v1/motion-profiles`,
+      command,
+      { requestId: command.requestId, timeoutMs: 5000 },
+    );
+    return adaptMotionProfiles(outcome.data);
+  }
+
+  async robotProvisioningCapabilities(
+    options: FetchSnapshotOptions = {},
+  ): Promise<ProvisioningCapabilities> {
+    return adaptProvisioningCapabilities(
+      await this.getJson("/api/v1/robot-provisioning/capabilities", options),
+    );
+  }
+
+  async createRobot(command: CreateRobotRequest): Promise<ProvisioningOutcome> {
+    const outcome = await this.postMutation(
+      `${this.baseUrl}/api/v1/robots`,
+      command,
+      { requestId: command.requestId, timeoutMs: 5000 },
+    );
+    return adaptProvisioningOutcome(outcome.data);
+  }
+
+  async robotProvisioning(
+    robotId: string,
+    options: FetchSnapshotOptions = {},
+  ): Promise<ProvisioningOutcome> {
+    return adaptProvisioningOutcome(
+      await this.getJson(
+        `/api/v1/robots/${encodeURIComponent(robotId)}/provisioning`,
+        options,
+      ),
+    );
+  }
+
+  async retryRobotProvisioning(
+    robotId: string,
+    command: RetryRobotRequest,
+  ): Promise<ProvisioningOutcome> {
+    const outcome = await this.postMutation(
+      `${this.baseUrl}/api/v1/robots/${encodeURIComponent(robotId)}/provisioning/retry`,
+      command,
+      { requestId: command.requestId, timeoutMs: 5000 },
+    );
+    return adaptProvisioningOutcome(outcome.data);
+  }
+
+  async removeRobot(
+    robotId: string,
+    command: RemoveRobotRequest,
+  ): Promise<RobotRemovalOutcome> {
+    const outcome = await this.postMutation(
+      `${this.baseUrl}/api/v1/robots/${encodeURIComponent(robotId)}/remove`,
+      command,
+      { requestId: command.requestId, timeoutMs: 5000 },
+    );
+    return adaptRobotRemovalOutcome(outcome.data);
+  }
+
+  async robotRemovalCapabilities(
+    options: FetchSnapshotOptions = {},
+  ): Promise<ProvisioningCapabilities> {
+    return adaptProvisioningCapabilities(
+      await this.getJson("/api/v1/robot-removal/capabilities", options),
+    );
+  }
+
+  async robotRemoval(
+    robotId: string,
+    options: FetchSnapshotOptions = {},
+  ): Promise<RobotRemovalOutcome> {
+    return adaptRobotRemovalOutcome(
+      await this.getJson(
+        `/api/v1/robots/${encodeURIComponent(robotId)}/removal`,
+        options,
+      ),
+    );
+  }
+
   /**
    * Submits a new dispatch order intent with UUIDv4 requestId.
    */
   async createOrder(
-    payload: Omit<CreateOrderRequest, "requestId">,
+    payload: CreateOrderInput,
+    options: MutationRequestOptions,
+  ): Promise<MutationOutcome> {
+    if ("task" in payload || "tasks" in payload)
+      return this.enqueueOrder(payload, options);
+    return this.postMutation(
+      `${this.baseUrl}/api/v1/orders${"assignments" in payload ? "" : "/auto-assign"}`,
+      { ...payload, requestId: options.requestId },
+      options,
+    );
+  }
+
+  async enqueueOrder(
+    payload: CreateOrderInput,
+    options: MutationRequestOptions,
+  ): Promise<MutationOutcome> {
+    const command = queueOrderInput(payload);
+    return this.postMutation(
+      `${this.baseUrl}/api/v1/${"tasks" in command ? "waves" : "queue/tasks"}`,
+      { ...command, requestId: options.requestId },
+      options,
+    );
+  }
+
+  async cancelQueueTask(
+    taskId: string,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
     return this.postMutation(
-      `${this.baseUrl}/api/v1/orders`,
-      { ...payload, requestId: options.requestId } satisfies CreateOrderRequest,
+      `${this.baseUrl}/api/v1/queue/tasks/${encodeURIComponent(taskId)}/cancel`,
+      { requestId: options.requestId },
       options,
     );
   }
@@ -257,7 +451,12 @@ export class CoreApiClient {
         const data = await response.json();
         return {
           status: "ACCEPTED",
-          entityId: data.orderId || data.robotId || data.id,
+          entityId:
+            data.taskId ||
+            data.waveId ||
+            data.orderId ||
+            data.robotId ||
+            data.id,
           entityVersion: data.entityVersion,
           orderUpdateId: data.orderUpdateId,
           data,

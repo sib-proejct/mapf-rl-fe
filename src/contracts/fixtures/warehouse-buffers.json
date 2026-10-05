@@ -1,0 +1,67 @@
+{
+  "contractVersion": "1.0.0",
+  "mapId": "123e4567-e89b-42d3-a456-426614174032",
+  "mapRevision": 1,
+  "buffers": [
+    {
+      "column": 2,
+      "row": 3,
+      "name": "Buffer South-01"
+    },
+    {
+      "column": 7,
+      "row": 3,
+      "name": "Buffer South-02"
+    },
+    {
+      "column": 11,
+      "row": 3,
+      "name": "Buffer South-03"
+    },
+    {
+      "column": 15,
+      "row": 3,
+      "name": "Buffer South-04"
+    },
+    {
+      "column": 19,
+      "row": 3,
+      "name": "Buffer South-05"
+    },
+    {
+      "column": 23,
+      "row": 3,
+      "name": "Buffer South-06"
+    },
+    {
+      "column": 2,
+      "row": 16,
+      "name": "Buffer North-01"
+    },
+    {
+      "column": 7,
+      "row": 16,
+      "name": "Buffer North-02"
+    },
+    {
+      "column": 11,
+      "row": 16,
+      "name": "Buffer North-03"
+    },
+    {
+      "column": 15,
+      "row": 16,
+      "name": "Buffer North-04"
+    },
+    {
+      "column": 19,
+      "row": 16,
+      "name": "Buffer North-05"
+    },
+    {
+      "column": 23,
+      "row": 16,
+      "name": "Buffer North-06"
+    }
+  ]
+}

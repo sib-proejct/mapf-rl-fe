@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><title>Telemetry browser integration</title>
+  <body>
+    <h1>Telemetry browser integration</h1>
+    <pre id="result">Running…</pre>
+    <script type="module">
+      import { TelemetryClient } from "/src/services/websocket/telemetryClient.ts";
+      import {
+        reconciliationReducer,
+        selectReconciliationView,
+        INITIAL_RECONCILIATION_STATE,
+      } from "/src/state/reconciliation/reducer.ts";
+      import { adaptOperationsSnapshot } from "/src/contracts/adapters/snapshotAdapter.ts";
+      import { CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE } from "/src/contracts/fixtures/canonical.ts";
+      import { NOMINAL_ROBOT_EVENT_1421 } from "/src/contracts/fixtures/reconciliationFixtures.ts";
+      const output = document.querySelector("#result"),
+        results = [];
+      const check = (condition, name) => {
+        if (!condition) throw new Error(name);
+        results.push("PASS " + name);
+        output.textContent = results.join("\n");
+      };
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const originalSocket = window.WebSocket,
+        originalFetch = window.fetch;
+      const sockets = [];
+      class FakeSocket {
+        constructor() {
+          sockets.push(this);
+        }
+        close() {
+          this.onclose?.({});
+        }
+      }
+      window.WebSocket = FakeSocket;
+      window.fetch = async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          telemetry: { supported: true, version: "1.0.0" },
+        }),
+      });
+      let state = reconciliationReducer(INITIAL_RECONCILIATION_STATE, {
+        type: "SNAPSHOT_REPLACED",
+        snapshot: adaptOperationsSnapshot(
+          CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
+        ),
+      });
+      const cursor = state.cursor.eventSequence,
+        initial = state.snapshot.robots.find((r) => r.id === "robot-01");
+      let snapshots = 0;
+      const client = new TelemetryClient({
+        onState: (robotId, data) => {
+          state = reconciliationReducer(state, {
+            type: "TELEMETRY_RECEIVED",
+            robotId,
+            data,
+          });
+        },
+        onStale: () => {
+          state = reconciliationReducer(state, { type: "TELEMETRY_STALE" });
+        },
+        onReady: () => {
+          snapshots++;
+          state = reconciliationReducer(state, {
+            type: "SNAPSHOT_REPLACED",
+            snapshot: adaptOperationsSnapshot(
+              CANONICAL_OPERATIONS_SNAPSHOT_FIXTURE,
+            ),
+          });
+        },
+      });
+      const emit = (socket, message) =>
+        socket.onmessage({ data: JSON.stringify(message) });
+      function frame(sequence, version, epoch = initial.sessionEpoch) {
+        return {
+          telemetryVersion: "1.0.0",
+          messageType: "telemetry.state",
+          robotId: "robot-01",
+          sessionEpoch: epoch,
+          simulatorBootId: "123e4567-e89b-42d3-a456-426614174000",
+          telemetrySequence: sequence,
+          payload: {
+            ...NOMINAL_ROBOT_EVENT_1421.payload.data,
+            stateVersion: version,
+            sessionEpoch: epoch,
+            simulatorBootId: "123e4567-e89b-42d3-a456-426614174000",
+            observedAt: new Date().toISOString(),
+            pose: { xMeters: 10, yMeters: 2.5, yawRadians: 0 },
+          },
+        };
+      }
+      const robot = () =>
+        selectReconciliationView(state).snapshot.robots.find(
+          (r) => r.id === "robot-01",
+        );
+      try {
+        await client.start();
+        const socket = sockets[0];
+        emit(socket, {
+          telemetryVersion: "1.0.0",
+          messageType: "telemetry.ready",
+        });
+        emit(socket, frame(1, initial.stateVersion + 10));
+        await wait(150);
+        check(
+          robot().pose.xMeters === 10 && state.cursor.eventSequence === cursor,
+          "telemetry updates pose without advancing durable cursor",
+        );
+        const version = robot().stateVersion;
+        emit(socket, frame(1, version + 1));
+        emit(socket, frame(0, version + 2));
+        emit(socket, frame(2, version + 3, initial.sessionEpoch - 1));
+        await wait(150);
+        check(
+          robot().stateVersion === version,
+          "duplicate, reversed and older epoch telemetry are ignored",
+        );
+        state = reconciliationReducer(state, {
+          type: "STREAM_EVENT_RECEIVED",
+          event: NOMINAL_ROBOT_EVENT_1421,
+        });
+        check(
+          robot().stateVersion === version && robot().pose.xMeters === 10,
+          "older durable robot event cannot replace newer telemetry",
+        );
+        socket.close();
+        check(
+          robot().freshness === "STALE",
+          "telemetry disconnect marks state stale",
+        );
+        state = reconciliationReducer(state, {
+          type: "STREAM_EVENT_RECEIVED",
+          event: NOMINAL_ROBOT_EVENT_1421,
+        });
+        check(
+          robot().freshness === "STALE",
+          "durable traffic cannot clear telemetry stale status",
+        );
+        await wait(1100);
+        const reconnect = sockets.at(-1);
+        emit(reconnect, {
+          telemetryVersion: "1.0.0",
+          messageType: "telemetry.ready",
+        });
+        emit(reconnect, frame(3, version + 1));
+        await wait(150);
+        check(
+          snapshots === 2 && robot().freshness === "CURRENT",
+          "reconnect recovers latest snapshot and fresh state",
+        );
+        client.stop();
+        const count = sockets.length;
+        window.fetch = async () => ({ ok: false, status: 500 });
+        const unavailable = new TelemetryClient({
+          onState() {},
+          onReady() {},
+          onStale() {},
+        });
+        await unavailable.start();
+        unavailable.stop();
+        check(
+          sockets.length === count,
+          "server failure never silently falls back to legacy",
+        );
+        output.textContent += "\nALL 7 CHECKS PASSED";
+      } catch (error) {
+        output.textContent += "\nFAIL " + error.stack;
+      } finally {
+        client.stop();
+        window.WebSocket = originalSocket;
+        window.fetch = originalFetch;
+      }
+    </script>
+  </body>
+</html>

@@ -55,6 +55,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     snapshot,
     selectedRobotId,
     setSelectedRobotId,
+    robotPlacementNodeIds,
     selectedNodeId,
     setSelectedNodeId,
     clickNode,
@@ -731,6 +732,28 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     }
 
     // 4. Selected Node Glow Halo
+    if (topology) {
+      ctx.save();
+      for (const [index, id] of robotPlacementNodeIds.entries()) {
+        const node = topology.nodeMap.get(id);
+        if (!node) continue;
+        const nx = node.column * cellW;
+        const ny = (heightCells - 1 - node.row) * cellH;
+        ctx.fillStyle = "rgba(0, 113, 227, 0.3)";
+        ctx.strokeStyle = "#0071E3";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(nx + 1, ny + 1, cellW - 2, cellH - 2, 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#0071E3";
+        ctx.font = `bold ${Math.max(8, Math.min(14, cellW * 0.4))}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(index + 1), nx + cellW / 2, ny + cellH / 2);
+      }
+      ctx.restore();
+    }
     if (selectedNodeId !== null && topology) {
       const node = topology.nodeMap.get(selectedNodeId);
       if (node) {
@@ -827,6 +850,33 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     const arrowTip = robotRadius * 0.72;
     const arrowBase = robotRadius * 0.36;
     const isLODCompact = zoom < 0.6;
+
+    ctx.save();
+    for (const robot of robots) {
+      const state = robot.bufferState;
+      if (
+        !state?.buffer ||
+        state.mapId !== map?.mapId ||
+        state.mapRevision !== map?.revision
+      )
+        continue;
+      const bx = (state.buffer.column + 0.5) * cellW;
+      const by = (heightCells - 1 - state.buffer.row + 0.5) * cellH;
+      ctx.strokeStyle = state.bufferOccupied ? "#F59E0B" : "#AF52DE";
+      ctx.lineWidth = 2;
+      ctx.setLineDash(state.bufferOccupied ? [] : [3, 2]);
+      ctx.strokeRect(
+        bx - cellW * 0.42,
+        by - cellH * 0.42,
+        cellW * 0.84,
+        cellH * 0.84,
+      );
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.font = "bold 7px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(state.bufferOccupied ? "WAIT" : "RSV", bx, by - cellH * 0.3);
+    }
+    ctx.restore();
 
     for (let i = 0; i < robots.length; i++) {
       const robot = robots[i];
@@ -1000,6 +1050,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     topology,
     activeOutgoingEdges,
     activeIncomingEdges,
+    robotPlacementNodeIds,
     selectedNodeId,
     hoverCoord,
     showTrails,
@@ -1465,7 +1516,10 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
                       </span>
                       <span className="text-[9px] text-[#86868B] font-sans">
                         Battery:{" "}
-                        {selectedNodeDetails.occupyingRobot.batteryPercent}%
+                        {selectedNodeDetails.occupyingRobot.batteryPercent?.toFixed(
+                          1,
+                        ) ?? "—"}
+                        %
                       </span>
                     </div>
                   </div>
