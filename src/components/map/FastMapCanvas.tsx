@@ -1,3 +1,5 @@
+import { useCanvasRendering } from "./useCanvasRendering.ts";
+import { resizeCanvas } from "../../utils/performance/canvasScheduler.ts";
 import {
   findRobotOrder,
   selectionColor,
@@ -97,14 +99,17 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
   } | null>(null);
 
   // Performance metrics state (HUD)
-  const [fps, setFps] = useState<number>(60);
+  const [fps, setFps] = useState<number>(0);
   const [renderTimeMs, setRenderTimeMs] = useState<number>(0);
   const [visibleRobotCount, setVisibleRobotCount] = useState<number>(0);
 
   const widthCells = map?.widthCells || 32;
   const heightCells = map?.heightCells || 20;
   const resolution = map?.resolutionMeters || 1.0;
-  const origin = map?.origin || { xMeters: 0, yMeters: 0 };
+  const origin = useMemo(
+    () => map?.origin || { xMeters: 0, yMeters: 0 },
+    [map?.origin],
+  );
 
   const worldWidth = widthCells * resolution;
   const worldHeight = heightCells * resolution;
@@ -169,7 +174,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
   const frameCountRef = useRef<number>(0);
   const accumulatedRenderTimeRef = useRef<number>(0);
   const lastFpsCalcRef = useRef<number>(performance.now());
-  const rafRef = useRef<number | null>(null);
+  const idleTimerRef = useRef<number | null>(null);
 
   // Offscreen canvas for static background cache
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -508,9 +513,10 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     }
 
     bgCanvasRef.current = bgCanvas;
+    requestDraw();
   }, [map, topology, baseWidth, baseHeight, widthCells, heightCells, isDark]);
 
-  // Main 60 FPS Render Loop
+  // Draw only when invalidated, at most 30 FPS
   const renderFrame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -521,13 +527,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
 
-    if (
-      canvas.width !== rect.width * dpr ||
-      canvas.height !== rect.height * dpr
-    ) {
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-    }
+    if (!resizeCanvas(canvas, rect.width, rect.height, dpr)) return;
 
     ctx.save();
     ctx.scale(canvas.width / rect.width, canvas.height / rect.height);
@@ -903,6 +903,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     const frameDuration = t1 - t0;
     accumulatedRenderTimeRef.current += frameDuration;
     frameCountRef.current++;
+    setVisibleRobotCount(visibleRobots);
 
     // Calculate smoothed FPS and average render time every 600ms (eliminates React re-render thrashing & ms flicker)
     if (t1 - lastFpsCalcRef.current >= 600) {
@@ -913,13 +914,19 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
       );
       setFps(computedFps);
       setRenderTimeMs(avgRenderMs);
-      setVisibleRobotCount(visibleRobots);
       frameCountRef.current = 0;
       accumulatedRenderTimeRef.current = 0;
       lastFpsCalcRef.current = t1;
     }
 
-    rafRef.current = requestAnimationFrame(renderFrame);
+    if (idleTimerRef.current !== null)
+      window.clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = window.setTimeout(() => {
+      setFps(0);
+      frameCountRef.current = 0;
+      accumulatedRenderTimeRef.current = 0;
+      lastFpsCalcRef.current = performance.now();
+    }, 600);
   }, [
     pan,
     zoom,
@@ -944,12 +951,14 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     origin,
   ]);
 
-  useEffect(() => {
-    rafRef.current = requestAnimationFrame(renderFrame);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [renderFrame]);
+  const requestDraw = useCanvasRendering(canvasRef, renderFrame);
+  useEffect(
+    () => () => {
+      if (idleTimerRef.current !== null)
+        window.clearTimeout(idleTimerRef.current);
+    },
+    [],
+  );
 
   // Spatial Hit-testing on Click / MouseMove
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1343,15 +1352,11 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
           <div className="flex items-center gap-1">
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                fps >= 55
-                  ? "bg-[#34C759]"
-                  : fps >= 30
-                    ? "bg-[#FF9F0A]"
-                    : "bg-[#FF3B30]"
+                fps === 0 ? "bg-[#86868B]" : "bg-[#34C759]"
               }`}
             />
             <span className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-              {fps} FPS
+              {fps === 0 ? (language === "ko" ? "유휴" : "Idle") : `${fps} FPS`}
             </span>
           </div>
 

@@ -3,7 +3,13 @@ import { useOperations } from "../../app/providers/OperationsContext.tsx";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { queueWaves } from "../../contracts/adapters/queueAdapter.ts";
 
-export const QueueTaskList: React.FC = () => {
+export interface QueueTaskListProps {
+  filter?: "active" | "history" | "all";
+}
+
+export const QueueTaskList: React.FC<QueueTaskListProps> = ({
+  filter: externalFilter,
+}) => {
   const {
     snapshot,
     cancelQueueTask,
@@ -21,7 +27,10 @@ export const QueueTaskList: React.FC = () => {
     current: number;
     total: number;
   } | null>(null);
-  const [filter, setFilter] = useState<"active" | "history" | "all">("active");
+  const [internalFilter, setInternalFilter] = useState<
+    "active" | "history" | "all"
+  >("active");
+  const filter = externalFilter ?? internalFilter;
   const uncertain =
     pendingMutations.find(
       (mutation) =>
@@ -245,34 +254,36 @@ export const QueueTaskList: React.FC = () => {
           </span>
         </div>
       </div>
-      <div
-        role="group"
-        aria-label={ko ? "작업 표시" : "Task filter"}
-        className="inline-flex p-1 bg-black/5 dark:bg-white/5 rounded-xl gap-1"
-      >
-        {(
-          [
-            ["active", ko ? "진행 중" : "Active", activeTasks.length],
-            ["history", ko ? "완료·취소" : "History", historyTasks.length],
-            ["all", ko ? "전체" : "All", tasks.length],
-          ] as const
-        ).map(([value, label, count]) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
-            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
-              filter === value
-                ? "bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white"
-                : "text-gray-500 hover:text-black dark:hover:text-white"
-            }`}
-          >
-            {label}{" "}
-            <span className="opacity-70 font-mono text-[11px]">{count}</span>
-          </button>
-        ))}
-      </div>
+      {!externalFilter && (
+        <div
+          role="group"
+          aria-label={ko ? "작업 표시" : "Task filter"}
+          className="inline-flex p-1 bg-black/5 dark:bg-white/5 rounded-xl gap-1"
+        >
+          {(
+            [
+              ["active", ko ? "진행 중" : "Active", activeTasks.length],
+              ["history", ko ? "완료·취소" : "History", historyTasks.length],
+              ["all", ko ? "전체" : "All", tasks.length],
+            ] as const
+          ).map(([value, label, count]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={filter === value}
+              onClick={() => setInternalFilter(value)}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+                filter === value
+                  ? "bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white"
+                  : "text-gray-500 hover:text-black dark:hover:text-white"
+              }`}
+            >
+              {label}{" "}
+              <span className="opacity-70 font-mono text-[11px]">{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {uncertainCreations.map((mutation) => (
         <div
           key={mutation.requestId}

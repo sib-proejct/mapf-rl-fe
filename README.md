@@ -119,3 +119,19 @@ and live robot reports. The robot inspector displays normal passage waiting and
 blocking robot IDs while retaining `EXECUTING` / `WAIT`. A fresh report without the
 field clears the wait. Motion preview times are explicitly estimates and do not
 provide motion permission. Deploy with the matching Core and Simulator.
+
+## 맵 렌더링 부하
+
+격자·그래프 맵은 데이터, 선택, 레이어, 테마, 확대·이동 또는 화면 크기가
+바뀔 때만 그리며 최대 30 FPS로 제한한다. 연속 갱신은 최신 상태로 합친다.
+변화가 없으면 렌더링 예약을 종료하고, 숨겨진 탭에서는 그리기를 중단한다.
+탭 복귀 시 최신 상태를 다시 그리며 통신·경고 처리는 계속 유지한다.
+픽셀 배율에 따른 해상도는 유지하고 실제 정수 픽셀 크기가 바뀔 때만
+캔버스 크기를 재설정한다. 격자 맵의 FPS는 실제 그린 횟수이며, 변화가
+600ms 이상 없으면 `유휴`로 표시한다. 10Hz 데이터에서 10 FPS는 정상이다.
+
+성능 비교는 동일 브라우저·화면 크기·픽셀 배율·맵·로봇 수에서 수행한다.
+Fixture의 스트림 정지/재개로 정지·이동 조건을 맞추고 탭 숨김도 비교한다.
+변화 없는 상태는 반복 그리기 0회, 이동은 최대 30 FPS, 숨김은 그리기 0회가
+기준이다. 실제 GPU 사용률은 운영체제 계측으로 별도 측정해야 하며 FPS 감소를
+GPU 절감률로 해석하지 않는다.

@@ -297,7 +297,7 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
           onOpenChange={setIsWaveFormOpen}
           hideTrigger={true}
         />
-        <QueueTaskList />
+        <QueueTaskList filter={orderFilter} />
         {filteredOrders.length === 0 ? (
           <div className="py-8 text-center text-xs text-[#86868B]">
             <p className="font-medium">{t("orderNoOrders")}</p>
@@ -320,16 +320,16 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                 }`}
               >
                 {/* Order Top Bar: ID & State Pill */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-mono text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                    <span>{order.id}</span>
-                    <span className="text-[10px] font-normal text-[#86868B] bg-[#F5F5F7] dark:bg-[#252528] px-1.5 py-0.5 rounded-full border border-black/[0.04] dark:border-white/[0.06]">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2 font-mono text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] min-w-0 truncate">
+                    <span className="truncate">{order.id}</span>
+                    <span className="text-[10px] font-normal text-[#86868B] bg-[#F5F5F7] dark:bg-[#252528] px-1.5 py-0.5 rounded-full border border-black/[0.04] dark:border-white/[0.06] shrink-0 whitespace-nowrap">
                       #{order.orderUpdateId}
                     </span>
                   </div>
 
                   <div
-                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${getLifecycleBadge(
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold shrink-0 whitespace-nowrap ${getLifecycleBadge(
                       order.state,
                     )}`}
                   >
@@ -338,7 +338,7 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                         order.state,
                       )}`}
                     />
-                    <span>
+                    <span className="whitespace-nowrap">
                       {isAppAck
                         ? "Applied (Ack)"
                         : isExec
@@ -361,7 +361,7 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                     return (
                       <div
                         key={`step-${s.idx}`}
-                        className="flex-1 flex flex-col gap-1"
+                        className="flex-1 flex flex-col gap-1 min-w-0"
                       >
                         <div
                           className={`h-1 rounded-full transition-all duration-300 ${
@@ -371,7 +371,7 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                           }`}
                         />
                         <span
-                          className={`text-[8px] sm:text-[9px] text-center font-medium ${
+                          className={`text-[8px] sm:text-[9px] text-center font-medium whitespace-nowrap truncate ${
                             isDone
                               ? "text-[#0071E3] dark:text-[#2997FF] font-semibold"
                               : "text-[#86868B]"
@@ -393,18 +393,18 @@ export const OrderList: React.FC<OrderListProps> = ({ embedded = false }) => {
                         e.stopPropagation();
                         setSelectedRobotId(assign.robotId);
                       }}
-                      className="flex items-center justify-between text-[11px] bg-[#F5F5F7] dark:bg-[#252528] px-2.5 py-1.5 rounded-xl hover:bg-[#0071E3]/15 transition-colors group cursor-pointer border border-black/[0.02] dark:border-white/[0.03]"
+                      className="flex items-center justify-between gap-2 text-[11px] bg-[#F5F5F7] dark:bg-[#252528] px-2.5 py-1.5 rounded-xl hover:bg-[#0071E3]/15 transition-colors group cursor-pointer border border-black/[0.02] dark:border-white/[0.03] min-w-0"
                     >
-                      <div className="flex items-center gap-1.5 font-mono">
-                        <Bot className="w-3.5 h-3.5 text-[#0071E3] dark:text-[#2997FF]" />
-                        <span className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] group-hover:text-[#0071E3] dark:group-hover:text-[#2997FF]">
+                      <div className="flex items-center gap-1.5 font-mono min-w-0 truncate">
+                        <Bot className="w-3.5 h-3.5 text-[#0071E3] dark:text-[#2997FF] shrink-0" />
+                        <span className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] group-hover:text-[#0071E3] dark:group-hover:text-[#2997FF] truncate">
                           {assign.robotId}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1 font-mono tabular-nums text-[#86868B]">
-                        <Flag className="w-3 h-3 text-[#0071E3] dark:text-[#2997FF]" />
-                        <span>
+                      <div className="flex items-center gap-1 font-mono tabular-nums text-[#86868B] shrink-0 whitespace-nowrap">
+                        <Flag className="w-3 h-3 text-[#0071E3] dark:text-[#2997FF] shrink-0" />
+                        <span className="whitespace-nowrap">
                           {assign.arrivalAction ?? "MOVE"} ({assign.goalColumn},{" "}
                           {assign.goalRow})
                         </span>

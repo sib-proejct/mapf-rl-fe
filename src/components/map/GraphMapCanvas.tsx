@@ -1,3 +1,5 @@
+import { useCanvasRendering } from "./useCanvasRendering.ts";
+import { resizeCanvas } from "../../utils/performance/canvasScheduler.ts";
 import {
   findRobotOrder,
   selectionColor,
@@ -80,7 +82,10 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
   const widthCells = map?.widthCells || 32;
   const heightCells = map?.heightCells || 20;
   const resolution = map?.resolutionMeters || 1.0;
-  const origin = map?.origin || { xMeters: 0, yMeters: 0 };
+  const origin = useMemo(
+    () => map?.origin || { xMeters: 0, yMeters: 0 },
+    [map?.origin],
+  );
 
   const baseWidth = 960;
   const baseHeight = (heightCells / widthCells) * baseWidth;
@@ -574,6 +579,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     }
 
     bgCanvasRef.current = bgCanvas;
+    requestDraw();
   }, [
     map,
     topology,
@@ -589,7 +595,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     showWaypoints,
   ]);
 
-  // Main 60 FPS HTML5 Canvas Render Loop
+  // Draw only when invalidated, at most 30 FPS
   const renderFrame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -599,13 +605,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
 
-    if (
-      canvas.width !== rect.width * dpr ||
-      canvas.height !== rect.height * dpr
-    ) {
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-    }
+    if (!resizeCanvas(canvas, rect.width, rect.height, dpr)) return;
 
     ctx.save();
     ctx.scale(canvas.width / rect.width, canvas.height / rect.height);
@@ -1092,24 +1092,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     showEdgeArrows,
   ]);
 
-  // RequestAnimationFrame 60 FPS Loop
-  const rafRef = useRef<number | null>(null);
-  useEffect(() => {
-    let active = true;
-    const loop = () => {
-      if (!active) return;
-      renderFrame();
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
-
-    return () => {
-      active = false;
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
-    };
-  }, [renderFrame]);
+  const requestDraw = useCanvasRendering(canvasRef, renderFrame);
 
   // Handle Dragging vs Click
   const handleMouseDown = (e: React.MouseEvent) => {

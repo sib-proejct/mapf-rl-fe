@@ -34,7 +34,7 @@ const MAX_HEIGHT = 1400;
 
 const DEFAULT_WIDTH_RATIO = 72; // 72% Map / 28% Sidebar
 const MIN_WIDTH_RATIO = 40;
-const MAX_WIDTH_RATIO = 88;
+const MAX_WIDTH_RATIO = 78; // Ensures sidebar has at least 22% width, preventing cramped vertical text layout
 
 export const OperationsPage: React.FC = () => {
   const { t, language } = useAppConfig();
@@ -388,16 +388,16 @@ export const OperationsPage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  updateMapWidthRatio(80);
+                  updateMapWidthRatio(78);
                   setShowLayoutMenu(false);
                 }}
                 className={`px-2.5 py-1.5 rounded-xl text-left font-medium transition-all ${
-                  mapWidthRatio === 80
+                  mapWidthRatio === 78
                     ? "bg-[#0071E3]/10 text-[#0071E3] dark:text-[#2997FF] font-bold border border-[#0071E3]/20"
                     : "hover:bg-black/5 dark:hover:bg-white/5 text-[#1D1D1F] dark:text-[#F5F5F7]"
                 }`}
               >
-                80% / 20%
+                78% / 22%
               </button>
               <button
                 onClick={() => {
@@ -591,7 +591,7 @@ export const OperationsPage: React.FC = () => {
           {/* Right Column: Slim Operations Sidebar (Collapsible) */}
           {!isSidebarCollapsed && (
             <div
-              className="flex flex-col min-w-0 transition-all duration-75"
+              className="flex flex-col min-w-[280px] transition-all duration-75"
               style={{
                 width: `${100 - mapWidthRatio}%`,
                 height: "100%",
