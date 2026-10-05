@@ -1,3 +1,4 @@
+import { findRobotOrder } from "./mapRobotDisplay.ts";
 import { NodeMoveConfirmation } from "./NodeMoveConfirmation.tsx";
 import React, { useState, useMemo } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
@@ -625,10 +626,11 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                     origin,
                   );
 
-                  const assignedOrder = orders.find(
-                    (o) =>
-                      o.id === robot.currentOrderId ||
-                      o.assignments.some((a) => a.robotId === robot.id),
+                  const assignedOrder = findRobotOrder(
+                    robot,
+                    orders,
+                    map?.mapId,
+                    map?.revision,
                   );
 
                   const goal = assignedOrder?.assignments.find(
@@ -641,7 +643,9 @@ export const AccessibleMapList: React.FC<AccessibleMapListProps> = ({
                   return (
                     <tr
                       key={`a11y-robot-${robot.id}`}
-                      onClick={() => setSelectedRobotId(robot.id)}
+                      onClick={() =>
+                        setSelectedRobotId(isSelected ? null : robot.id)
+                      }
                       className={`transition-colors cursor-pointer group ${
                         isSelected
                           ? "bg-[#0071E3]/10 dark:bg-[#2997FF]/15 font-medium"

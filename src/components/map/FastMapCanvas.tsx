@@ -1,3 +1,8 @@
+import {
+  findRobotOrder,
+  selectionColor,
+  selectionFill,
+} from "./mapRobotDisplay.ts";
 import { NodeMoveConfirmation } from "./NodeMoveConfirmation.tsx";
 import { useRobotTrails } from "./useRobotTrails.ts";
 import React, {
@@ -65,8 +70,8 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
   const map = snapshot?.map;
   const robots = useMemo(() => snapshot?.robots || [], [snapshot?.robots]);
-  const robotTrails = useRobotTrails(robots, `${map?.mapId}:${map?.revision}`);
   const orders = useMemo(() => snapshot?.orders || [], [snapshot?.orders]);
+  const robotTrails = useRobotTrails(robots, orders, map?.mapId, map?.revision);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -642,41 +647,57 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
     if (showGoals && orders.length > 0) {
       ctx.save();
-      for (const order of orders) {
-        if (["Completed", "Cancelled", "Rejected"].includes(order.state))
+      const goals = robots.flatMap((robot) => {
+        const order = findRobotOrder(robot, orders, map?.mapId, map?.revision);
+        return (
+          order?.assignments.filter((assign) => assign.robotId === robot.id) ??
+          []
+        );
+      });
+      goals.sort(
+        (a, b) =>
+          Number(a.robotId === selectedRobotId) -
+          Number(b.robotId === selectedRobotId),
+      );
+      for (const assign of goals) {
+        const gx = (assign.goalColumn + 0.5) * cellW;
+        const gy = (heightCells - 1 - assign.goalRow + 0.5) * cellH;
+
+        if (
+          gx < viewLeft - 30 ||
+          gx > viewRight + 30 ||
+          gy < viewTop - 30 ||
+          gy > viewBottom + 30
+        ) {
           continue;
-        for (const assign of order.assignments) {
-          const gx = (assign.goalColumn + 0.5) * cellW;
-          const gy = (heightCells - 1 - assign.goalRow + 0.5) * cellH;
-
-          if (
-            gx < viewLeft - 30 ||
-            gx > viewRight + 30 ||
-            gy < viewTop - 30 ||
-            gy > viewBottom + 30
-          ) {
-            continue;
-          }
-
-          const isAssignedToSelected = assign.robotId === selectedRobotId;
-          const goalR = isAssignedToSelected ? cellMin * 0.55 : cellMin * 0.4;
-
-          ctx.beginPath();
-          ctx.arc(gx, gy, goalR, 0, Math.PI * 2);
-          ctx.fillStyle = isAssignedToSelected
-            ? "rgba(0, 113, 227, 0.2)"
-            : "rgba(0, 113, 227, 0.08)";
-          ctx.fill();
-          ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
-          ctx.lineWidth = isAssignedToSelected ? 2 : 1.2;
-          ctx.setLineDash([4, 3]);
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.arc(gx, gy, Math.max(2, cellMin * 0.1), 0, Math.PI * 2);
-          ctx.fillStyle = isDark ? "#2997FF" : "#0071E3";
-          ctx.fill();
         }
+
+        const isAssignedToSelected = assign.robotId === selectedRobotId;
+        const goalR = isAssignedToSelected ? cellMin * 0.55 : cellMin * 0.4;
+
+        ctx.beginPath();
+        ctx.arc(gx, gy, goalR, 0, Math.PI * 2);
+        ctx.fillStyle = isAssignedToSelected
+          ? selectionFill(isDark)
+          : "rgba(0, 113, 227, 0.08)";
+        ctx.fill();
+        ctx.strokeStyle = isAssignedToSelected
+          ? selectionColor(isDark)
+          : isDark
+            ? "#2997FF"
+            : "#0071E3";
+        ctx.lineWidth = isAssignedToSelected ? 3 : 1.2;
+        ctx.setLineDash(isAssignedToSelected ? [] : [4, 3]);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(gx, gy, Math.max(2, cellMin * 0.1), 0, Math.PI * 2);
+        ctx.fillStyle = isAssignedToSelected
+          ? selectionColor(isDark)
+          : isDark
+            ? "#2997FF"
+            : "#0071E3";
+        ctx.fill();
       }
       ctx.restore();
     }
@@ -767,12 +788,10 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
           0,
           Math.PI * 2,
         );
-        ctx.fillStyle = isDark
-          ? "rgba(41, 151, 255, 0.25)"
-          : "rgba(0, 113, 227, 0.2)";
+        ctx.fillStyle = selectionFill(isDark);
         ctx.fill();
         ctx.lineWidth = Math.max(1.5, robotRadius * 0.2);
-        ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
+        ctx.strokeStyle = selectionColor(isDark);
         ctx.stroke();
       }
 
@@ -782,8 +801,13 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
         ctx.arc(0, 0, Math.max(3, robotRadius * 0.7), 0, Math.PI * 2);
         ctx.fillStyle = robotColor;
         ctx.fill();
-        ctx.lineWidth = 1.0;
-        ctx.strokeStyle = isDark ? "#1C1C1E" : "#FFFFFF";
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.strokeStyle =
+          isSelected && !isDisconnected && !isSafetyAlert
+            ? selectionColor(isDark)
+            : isDark
+              ? "#1C1C1E"
+              : "#FFFFFF";
         ctx.stroke();
       } else {
         // LOD Level 2: Full Detailed Robot Chassis & Direction Arrow
@@ -794,7 +818,10 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
         ctx.lineWidth = isSelected
           ? Math.max(2, robotRadius * 0.25)
           : Math.max(1.2, robotRadius * 0.18);
-        ctx.strokeStyle = robotColor;
+        ctx.strokeStyle =
+          isSelected && !isDisconnected && !isSafetyAlert
+            ? selectionColor(isDark)
+            : robotColor;
         ctx.stroke();
 
         // Heading Direction Chevron
@@ -958,7 +985,9 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     }
 
     if (clickedRobot) {
-      setSelectedRobotId(clickedRobot.id);
+      setSelectedRobotId(
+        clickedRobot.id === selectedRobotId ? null : clickedRobot.id,
+      );
       return;
     }
 
@@ -976,6 +1005,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
       }
     }
 
+    setSelectedRobotId(null);
     setSelectedNodeId(null);
   };
 
