@@ -3,7 +3,13 @@ import { useOperations } from "../../app/providers/OperationsContext.tsx";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import { queueWaves } from "../../contracts/adapters/queueAdapter.ts";
 
-export const QueueTaskList: React.FC = () => {
+export interface QueueTaskListProps {
+  filter?: "active" | "history" | "all";
+}
+
+export const QueueTaskList: React.FC<QueueTaskListProps> = ({
+  filter: externalFilter,
+}) => {
   const {
     snapshot,
     cancelQueueTask,
@@ -21,7 +27,10 @@ export const QueueTaskList: React.FC = () => {
     current: number;
     total: number;
   } | null>(null);
-  const [filter, setFilter] = useState<"active" | "history" | "all">("active");
+  const [internalFilter, setInternalFilter] = useState<
+    "active" | "history" | "all"
+  >("active");
+  const filter = externalFilter ?? internalFilter;
   const uncertain =
     pendingMutations.find(
       (mutation) =>
@@ -245,34 +254,36 @@ export const QueueTaskList: React.FC = () => {
           </span>
         </div>
       </div>
-      <div
-        role="group"
-        aria-label={ko ? "작업 표시" : "Task filter"}
-        className="inline-flex p-1 bg-black/5 dark:bg-white/5 rounded-xl gap-1"
-      >
-        {(
-          [
-            ["active", ko ? "진행 중" : "Active", activeTasks.length],
-            ["history", ko ? "완료·취소" : "History", historyTasks.length],
-            ["all", ko ? "전체" : "All", tasks.length],
-          ] as const
-        ).map(([value, label, count]) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
-            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
-              filter === value
-                ? "bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white"
-                : "text-gray-500 hover:text-black dark:hover:text-white"
-            }`}
-          >
-            {label}{" "}
-            <span className="opacity-70 font-mono text-[11px]">{count}</span>
-          </button>
-        ))}
-      </div>
+      {!externalFilter && (
+        <div
+          role="group"
+          aria-label={ko ? "작업 표시" : "Task filter"}
+          className="inline-flex p-1 bg-black/5 dark:bg-white/5 rounded-xl gap-1"
+        >
+          {(
+            [
+              ["active", ko ? "진행 중" : "Active", activeTasks.length],
+              ["history", ko ? "완료·취소" : "History", historyTasks.length],
+              ["all", ko ? "전체" : "All", tasks.length],
+            ] as const
+          ).map(([value, label, count]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={filter === value}
+              onClick={() => setInternalFilter(value)}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+                filter === value
+                  ? "bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white"
+                  : "text-gray-500 hover:text-black dark:hover:text-white"
+              }`}
+            >
+              {label}{" "}
+              <span className="opacity-70 font-mono text-[11px]">{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {uncertainCreations.map((mutation) => (
         <div
           key={mutation.requestId}
@@ -400,8 +411,8 @@ export const QueueTaskList: React.FC = () => {
                 >
                   {task.reason === "CARGO_RECOVERY_REQUIRED"
                     ? ko
-                      ? "화물이 남아 있습니다. 이 로봇을 지정한 PLACE 작업으로 복구하세요."
-                      : "Cargo remains. Queue a PLACE task for this robot to recover."
+                      ? "화물이 남아 있습니다. 다시 취소하면 정지 확인 후 작업이 취소 이력으로 이동합니다. 화물은 유지되며 PLACE 작업으로 처리할 수 있습니다."
+                      : "Cargo remains. Cancel again to move this task to history once stopped. Cargo is retained and can be handled with a PLACE task."
                     : reasonText(task.reason)}
                 </p>
               )}

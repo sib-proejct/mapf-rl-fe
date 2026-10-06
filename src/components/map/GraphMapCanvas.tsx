@@ -1,4 +1,14 @@
+import { useCanvasRendering } from "./useCanvasRendering.ts";
+import { resizeCanvas } from "../../utils/performance/canvasScheduler.ts";
+import {
+  findRobotOrder,
+  selectionColor,
+  selectionFill,
+} from "./mapRobotDisplay.ts";
 import { NodeMoveConfirmation } from "./NodeMoveConfirmation.tsx";
+import { usePlannedRobotRoute } from "./usePlannedRobotRoute.ts";
+import { drawPlannedRoute } from "./drawPlannedRoute.ts";
+import { PlannedRouteStatus } from "./PlannedRouteStatus.tsx";
 import { useRobotTrails } from "./useRobotTrails.ts";
 import React, {
   useState,
@@ -53,6 +63,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
 
   const {
     snapshot,
+    connectionState,
     selectedRobotId,
     setSelectedRobotId,
     robotPlacementNodeIds,
@@ -65,8 +76,21 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
 
   const map = snapshot?.map;
   const robots = useMemo(() => snapshot?.robots || [], [snapshot?.robots]);
-  const robotTrails = useRobotTrails(robots, `${map?.mapId}:${map?.revision}`);
   const orders = useMemo(() => snapshot?.orders || [], [snapshot?.orders]);
+  const plannedRoutes = usePlannedRobotRoute(
+    robots,
+    orders,
+    map,
+    selectedRobotId,
+  );
+  const selectedRobot = robots.find((robot) => robot.id === selectedRobotId);
+  const selectedOrder = selectedRobot
+    ? findRobotOrder(selectedRobot, orders, map?.mapId, map?.revision)
+    : undefined;
+  const selectedPlannedRoute = selectedRobotId
+    ? plannedRoutes.get(selectedRobotId)
+    : undefined;
+  const robotTrails = useRobotTrails(robots, orders, map?.mapId, map?.revision);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -75,7 +99,10 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
   const widthCells = map?.widthCells || 32;
   const heightCells = map?.heightCells || 20;
   const resolution = map?.resolutionMeters || 1.0;
-  const origin = map?.origin || { xMeters: 0, yMeters: 0 };
+  const origin = useMemo(
+    () => map?.origin || { xMeters: 0, yMeters: 0 },
+    [map?.origin],
+  );
 
   const baseWidth = 960;
   const baseHeight = (heightCells / widthCells) * baseWidth;
@@ -569,6 +596,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     }
 
     bgCanvasRef.current = bgCanvas;
+    requestDraw();
   }, [
     map,
     topology,
@@ -584,7 +612,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     showWaypoints,
   ]);
 
-  // Main 60 FPS HTML5 Canvas Render Loop
+  // Draw only when invalidated, at most 30 FPS
   const renderFrame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -594,13 +622,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
 
-    if (
-      canvas.width !== rect.width * dpr ||
-      canvas.height !== rect.height * dpr
-    ) {
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-    }
+    if (!resizeCanvas(canvas, rect.width, rect.height, dpr)) return;
 
     ctx.save();
     ctx.scale(canvas.width / rect.width, canvas.height / rect.height);
@@ -779,6 +801,18 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     }
 
     // 5. Observed movement trail, displayed as a dashed line.
+    if (selectedPlannedRoute) {
+      drawPlannedRoute(
+        ctx,
+        selectedPlannedRoute.points,
+        mapDim,
+        baseWidth,
+        baseHeight,
+        zoom,
+        isDark,
+      );
+    }
+
     if (showTrails) {
       ctx.save();
       ctx.lineCap = "round";
@@ -802,43 +836,60 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     }
 
     // 6. Active Order Goals (Target Reticle)
-    if (showGoals && orders.length > 0) {
+    if ((showGoals || selectedRobotId) && orders.length > 0) {
       ctx.save();
-      for (const order of orders) {
-        if (["Completed", "Cancelled", "Rejected"].includes(order.state))
+      const goals = robots.flatMap((robot) => {
+        const order = findRobotOrder(robot, orders, map?.mapId, map?.revision);
+        return (
+          order?.assignments.filter((assign) => assign.robotId === robot.id) ??
+          []
+        );
+      });
+      goals.sort(
+        (a, b) =>
+          Number(a.robotId === selectedRobotId) -
+          Number(b.robotId === selectedRobotId),
+      );
+      for (const assign of goals) {
+        if (!showGoals && assign.robotId !== selectedRobotId) continue;
+        const gx = (assign.goalColumn + 0.5) * cellW;
+        const gy = (heightCells - 1 - assign.goalRow + 0.5) * cellH;
+
+        if (
+          gx < viewLeft - 30 ||
+          gx > viewRight + 30 ||
+          gy < viewTop - 30 ||
+          gy > viewBottom + 30
+        ) {
           continue;
-        for (const assign of order.assignments) {
-          const gx = (assign.goalColumn + 0.5) * cellW;
-          const gy = (heightCells - 1 - assign.goalRow + 0.5) * cellH;
-
-          if (
-            gx < viewLeft - 30 ||
-            gx > viewRight + 30 ||
-            gy < viewTop - 30 ||
-            gy > viewBottom + 30
-          ) {
-            continue;
-          }
-
-          const isAssignedToSelected = assign.robotId === selectedRobotId;
-          const goalR = isAssignedToSelected ? cellMin * 0.55 : cellMin * 0.4;
-
-          ctx.beginPath();
-          ctx.arc(gx, gy, goalR, 0, Math.PI * 2);
-          ctx.fillStyle = isAssignedToSelected
-            ? "rgba(0, 113, 227, 0.2)"
-            : "rgba(0, 113, 227, 0.08)";
-          ctx.fill();
-          ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
-          ctx.lineWidth = isAssignedToSelected ? 2 : 1.2;
-          ctx.setLineDash([4, 3]);
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.arc(gx, gy, Math.max(2, cellMin * 0.1), 0, Math.PI * 2);
-          ctx.fillStyle = isDark ? "#2997FF" : "#0071E3";
-          ctx.fill();
         }
+
+        const isAssignedToSelected = assign.robotId === selectedRobotId;
+        const goalR = isAssignedToSelected ? cellMin * 0.55 : cellMin * 0.4;
+
+        ctx.beginPath();
+        ctx.arc(gx, gy, goalR, 0, Math.PI * 2);
+        ctx.fillStyle = isAssignedToSelected
+          ? selectionFill(isDark)
+          : "rgba(0, 113, 227, 0.08)";
+        ctx.fill();
+        ctx.strokeStyle = isAssignedToSelected
+          ? selectionColor(isDark)
+          : isDark
+            ? "#2997FF"
+            : "#0071E3";
+        ctx.lineWidth = isAssignedToSelected ? 3 : 1.2;
+        ctx.setLineDash(isAssignedToSelected ? [] : [4, 3]);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(gx, gy, Math.max(2, cellMin * 0.1), 0, Math.PI * 2);
+        ctx.fillStyle = isAssignedToSelected
+          ? selectionColor(isDark)
+          : isDark
+            ? "#2997FF"
+            : "#0071E3";
+        ctx.fill();
       }
       ctx.restore();
     }
@@ -930,12 +981,10 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
           0,
           Math.PI * 2,
         );
-        ctx.fillStyle = isDark
-          ? "rgba(41, 151, 255, 0.25)"
-          : "rgba(0, 113, 227, 0.2)";
+        ctx.fillStyle = selectionFill(isDark);
         ctx.fill();
         ctx.lineWidth = Math.max(1.5, robotRadius * 0.2);
-        ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
+        ctx.strokeStyle = selectionColor(isDark);
         ctx.stroke();
       }
 
@@ -944,8 +993,13 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
         ctx.arc(0, 0, Math.max(3, robotRadius * 0.7), 0, Math.PI * 2);
         ctx.fillStyle = robotColor;
         ctx.fill();
-        ctx.lineWidth = 1.0;
-        ctx.strokeStyle = isDark ? "#1C1C1E" : "#FFFFFF";
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.strokeStyle =
+          isSelected && !isDisconnected && !isSafetyAlert
+            ? selectionColor(isDark)
+            : isDark
+              ? "#1C1C1E"
+              : "#FFFFFF";
         ctx.stroke();
       } else {
         ctx.beginPath();
@@ -955,7 +1009,10 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
         ctx.lineWidth = isSelected
           ? Math.max(2, robotRadius * 0.25)
           : Math.max(1.2, robotRadius * 0.18);
-        ctx.strokeStyle = robotColor;
+        ctx.strokeStyle =
+          isSelected && !isDisconnected && !isSafetyAlert
+            ? selectionColor(isDark)
+            : robotColor;
         ctx.stroke();
 
         // Heading Direction Chevron
@@ -1060,29 +1117,13 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
     showGoals,
     orders,
     selectedRobotId,
+    selectedPlannedRoute,
     robots,
     showNodeLabels,
     showEdgeArrows,
   ]);
 
-  // RequestAnimationFrame 60 FPS Loop
-  const rafRef = useRef<number | null>(null);
-  useEffect(() => {
-    let active = true;
-    const loop = () => {
-      if (!active) return;
-      renderFrame();
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
-
-    return () => {
-      active = false;
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
-    };
-  }, [renderFrame]);
+  const requestDraw = useCanvasRendering(canvasRef, renderFrame);
 
   // Handle Dragging vs Click
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -1170,16 +1211,16 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
           baseHeight,
         );
         if (Math.hypot(pos.x - clickX, pos.y - clickY) <= hitRadius) {
-          setSelectedRobotId(robot.id);
+          setSelectedRobotId(robot.id === selectedRobotId ? null : robot.id);
           clickedRobot = true;
           break;
         }
       }
 
       // 2. Check if clicked near a topology node
-      if (!clickedRobot && topology) {
+      if (!clickedRobot) {
         let clickedNode = false;
-        for (const node of topology.nodes) {
+        for (const node of topology?.nodes ?? []) {
           const nx = (node.column + 0.5) * cellW;
           const ny = (heightCells - 1 - node.row + 0.5) * cellH;
           if (Math.hypot(nx - clickX, ny - clickY) <= cellMin * 0.5) {
@@ -1189,6 +1230,7 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
           }
         }
         if (!clickedNode) {
+          setSelectedRobotId(null);
           setSelectedNodeId(null);
         }
       }
@@ -1365,6 +1407,12 @@ export const GraphMapCanvas: React.FC<GraphMapCanvasProps> = ({
         <canvas
           ref={canvasRef}
           className="w-full h-full block absolute inset-0 touch-none"
+        />
+        <PlannedRouteStatus
+          robot={selectedRobot}
+          order={selectedOrder}
+          available={!!selectedPlannedRoute}
+          disconnected={connectionState !== "Current"}
         />
 
         {/* 3. Live Coordinate Tracker Overlay (Top Left) */}

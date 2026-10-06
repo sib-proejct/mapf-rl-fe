@@ -2,9 +2,53 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { CoreApiClient, ProblemError } from "../src/services/api/client.ts";
+import { setLiveMapAvailable } from "../src/services/maps/mapGeneration.ts";
 
 const REQUEST_ID = "60000000-0000-4000-8000-000000000001";
 const MAP_ID = "00000000-0000-4000-8000-000000000001";
+
+test("map connection loss blocks writes, allows reads and explicit switch recovery", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    setLiveMapAvailable(true);
+  });
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init });
+    return new Response(JSON.stringify({ generation: 2, phase: "STOPPING" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const client = new CoreApiClient("https://core.example", () => "csrf-token");
+  const submit = () =>
+    client.enqueueOrder(
+      {
+        mapId: MAP_ID,
+        mapRevision: 1,
+        task: { robotId: "r-001", steps: [{ goalColumn: 4, goalRow: 5 }] },
+      },
+      { requestId: REQUEST_ID },
+    );
+
+  setLiveMapAvailable(false);
+  await assert.rejects(
+    submit(),
+    (error) =>
+      error instanceof ProblemError &&
+      error.problem.code === "LOCAL_MAP_UNAVAILABLE",
+  );
+  assert.equal(calls.length, 0);
+  await client.fetchOperationsSnapshot();
+  assert.equal(calls[0].init.method, "GET");
+  await client.activateLocalMap(MAP_ID, 1);
+  assert.equal(calls[1].url, "https://core.example/api/v1/local-maps/activate");
+
+  setLiveMapAvailable(true);
+  await submit();
+  assert.equal(calls[2].url, "https://core.example/api/v1/queue/tasks");
+});
 
 test("createOrder sends the Core body contract and CSRF token", async (t) => {
   const originalFetch = globalThis.fetch;

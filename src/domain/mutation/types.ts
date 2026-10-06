@@ -91,6 +91,7 @@ export interface MutationOutcome {
 
 export interface PendingMutation<TPayload = Record<string, unknown>> {
   requestId: string; // RFC 4122 UUIDv4
+  mapGeneration: number | null;
   operation: MutationOperation;
   state: MutationState;
   payload: TPayload;

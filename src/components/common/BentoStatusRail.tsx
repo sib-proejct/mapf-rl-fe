@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
+import { useLiveMapControl } from "../../app/providers/LiveMapControl.tsx";
 import {
   useOperations,
   type FleetScale,
@@ -12,6 +13,8 @@ import {
   Clock,
   Zap,
   Gauge,
+  Map,
+  ChevronDown,
   Sparkles,
   ShieldAlert,
   ShieldCheck,
@@ -178,7 +181,52 @@ export const BentoStatusRail: React.FC = () => {
       ? Math.round(((totalFleet - disconnectedCount) / totalFleet) * 100)
       : 100;
 
-  const scaleOptions: FleetScale[] = [4, 100];
+  const mapPresets: {
+    id: string;
+    scale: FleetScale;
+    labelKo: string;
+    labelEn: string;
+    desc: string;
+  }[] = [
+    {
+      id: "standard-4",
+      scale: 4,
+      labelKo: "표준 맵 (32×20)",
+      labelEn: "Standard (32×20)",
+      desc: "Standard 32x20 Grid",
+    },
+    {
+      id: "mega-100",
+      scale: 100,
+      labelKo: "메가 맵 (64×40)",
+      labelEn: "Mega (64×40)",
+      desc: "Mega Warehouse 64x40 Grid",
+    },
+  ];
+
+  const liveMapLabel = snapshot?.map
+    ? `${snapshot.map.widthCells}×${snapshot.map.heightCells}`
+    : language === "ko"
+      ? "맵 로딩 중"
+      : "Loading map";
+  const {
+    state: liveMapState,
+    available: liveMapAvailable,
+    activate: activateLiveMap,
+  } = useLiveMapControl();
+  const liveMapHint =
+    language === "ko"
+      ? "로봇 등록은 보존하고 선택한 맵의 작업 상태를 초기화합니다. 한 번에 하나의 맵만 실행합니다."
+      : "Preserve registered robots and reset the selected map's work state. Only one map runs at a time.";
+  const liveTargets = (liveMapState?.maps ?? []).map((map) => ({
+    ...map,
+    labelKo: map.mapType === "mega" ? "메가 맵 (64×40)" : "표준 맵 (32×20)",
+    labelEn: map.mapType === "mega" ? "Mega (64×40)" : "Standard (32×20)",
+  }));
+  const currentLiveMapId = snapshot?.map?.mapId ?? "";
+  const currentLiveTarget = liveTargets.find(
+    (target) => target.mapId === currentLiveMapId,
+  );
 
   return (
     <div className="space-y-2.5 relative z-30">
@@ -190,7 +238,7 @@ export const BentoStatusRail: React.FC = () => {
               <Gauge className="w-3.5 h-3.5" />
             </div>
             <span className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
-              Fleet Scale Simulator
+              {language === "ko" ? "맵 & 플릿 컨트롤" : "Map & Fleet Control"}
             </span>
           </div>
 
@@ -520,21 +568,94 @@ export const BentoStatusRail: React.FC = () => {
             )}
           </div>
 
-          {/* Scale Selector Pills */}
-          <div className="flex items-center gap-1 bg-[#F2F4F6] dark:bg-[#252528] p-0.5 rounded-xl border border-black/[0.04] dark:border-white/[0.06]">
-            {scaleOptions.map((s) => (
-              <button
-                key={`scale-${s}`}
-                onClick={() => setFleetScale(s)}
-                className={`px-2.5 py-0.5 rounded-lg text-[11px] font-mono font-bold transition-all cursor-pointer ${
-                  fleetScale === s
-                    ? "bg-[#0071E3] text-white shadow-xs"
-                    : "text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]"
+          {/* Live selection opens an isolated Core-owned map environment. */}
+          <div
+            className="relative flex items-center"
+            title={transportMode === "FIXTURE_STREAM" ? undefined : liveMapHint}
+          >
+            <label htmlFor="map-preset-select" className="sr-only">
+              {transportMode === "FIXTURE_STREAM"
+                ? language === "ko"
+                  ? "맵 프리셋 선택"
+                  : "Select Map Preset"
+                : language === "ko"
+                  ? "현재 서버 맵"
+                  : "Current server map"}
+            </label>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#F2F4F6] dark:bg-[#252528] border border-black/[0.04] dark:border-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7] text-[11px] font-medium hover:border-black/10 dark:hover:border-white/15 transition-all">
+              <Map
+                className={`w-3.5 h-3.5 shrink-0 ${
+                  transportMode === "LIVE_WEBSOCKET"
+                    ? "text-[#34C759]"
+                    : "text-[#0071E3] dark:text-[#2997FF]"
                 }`}
-              >
-                {s === 4 ? "4 (Standard)" : `${s} Units`}
-              </button>
-            ))}
+              />
+              {transportMode === "FIXTURE_STREAM" ? (
+                <>
+                  <select
+                    id="map-preset-select"
+                    aria-label={
+                      language === "ko" ? "맵 프리셋 선택" : "Select Map Preset"
+                    }
+                    value={fleetScale}
+                    onChange={(e) =>
+                      setFleetScale(Number(e.target.value) as FleetScale)
+                    }
+                    className="appearance-none bg-transparent outline-none cursor-pointer font-medium text-[11px] pr-1"
+                  >
+                    {mapPresets.map((preset) => (
+                      <option
+                        key={preset.id}
+                        value={preset.scale}
+                        className="bg-white dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-[#F5F5F7]"
+                      >
+                        {language === "ko" ? preset.labelKo : preset.labelEn}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3 h-3 text-[#86868B] pointer-events-none shrink-0" />
+                </>
+              ) : (
+                <>
+                  <select
+                    id="map-preset-select"
+                    value={currentLiveMapId}
+                    disabled={
+                      !liveMapAvailable ||
+                      !snapshot?.map ||
+                      liveTargets.length === 0
+                    }
+                    onChange={(event) => {
+                      const target = liveTargets.find(
+                        (item) => item.mapId === event.target.value,
+                      );
+                      if (target && target.mapId !== currentLiveMapId) {
+                        void activateLiveMap(target.mapId);
+                      }
+                    }}
+                    aria-describedby="live-map-selection-hint"
+                    className="appearance-none bg-transparent outline-none cursor-pointer font-medium text-[11px] pr-1 text-inherit"
+                  >
+                    {!currentLiveTarget && (
+                      <option value={currentLiveMapId}>{liveMapLabel}</option>
+                    )}
+                    {liveTargets.map((target) => (
+                      <option
+                        key={target.mapId}
+                        value={target.mapId}
+                        className="bg-white dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-[#F5F5F7]"
+                      >
+                        {language === "ko" ? target.labelKo : target.labelEn}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3 h-3 text-[#86868B] pointer-events-none shrink-0" />
+                  <span id="live-map-selection-hint" className="sr-only">
+                    {liveMapHint}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Stream Rate & Motion Toggle */}

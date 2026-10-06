@@ -35,7 +35,7 @@ export function NodeMoveConfirmation({ nodeId }: { nodeId: number }) {
       : station?.type === "place"
         ? "도착 후 하역"
         : station?.type === "charger"
-          ? "도착 후 100% 충전"
+          ? `도착 후 ${snapshot?.batteryPolicy?.chargeTargetPercent ?? 80}% 충전`
           : "";
   const error =
     nodeCommand?.nodeId === nodeId &&

@@ -90,7 +90,7 @@ export const OperationsSidebar: React.FC<OperationsSidebarProps> = ({
           <button
             disabled={isOrderModalOpen}
             onClick={() => setActiveTab("fleet")}
-            className={`py-2 px-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer select-none flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer select-none flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === "fleet"
                 ? "bg-white dark:bg-[#1C1C1E] text-[#191F28] dark:text-[#F5F5F7] font-bold shadow-xs border border-black/[0.04] dark:border-white/[0.06]"
                 : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7] font-medium"
@@ -98,15 +98,17 @@ export const OperationsSidebar: React.FC<OperationsSidebarProps> = ({
             title={t("robotListTitle")}
           >
             <Bot
-              className={`w-3.5 h-3.5 ${
+              className={`w-3.5 h-3.5 shrink-0 ${
                 activeTab === "fleet"
                   ? "text-[#0071E3] dark:text-[#2997FF]"
                   : "text-[#8B95A1] dark:text-[#86868B]"
               }`}
             />
-            <span className="truncate">{t("robotListTitle")}</span>
+            <span className="truncate whitespace-nowrap">
+              {t("robotListTitle")}
+            </span>
             <span
-              className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full tabular-nums ${
+              className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full tabular-nums shrink-0 ${
                 activeTab === "fleet"
                   ? "bg-[#0071E3]/10 dark:bg-[#2997FF]/15 text-[#0071E3] dark:text-[#2997FF]"
                   : "bg-black/5 dark:bg-white/5 text-[#86868B]"
@@ -119,7 +121,7 @@ export const OperationsSidebar: React.FC<OperationsSidebarProps> = ({
           {/* Tab 2: Active Orders */}
           <button
             onClick={() => setActiveTab("orders")}
-            className={`py-2 px-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer select-none flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer select-none flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === "orders"
                 ? "bg-white dark:bg-[#1C1C1E] text-[#191F28] dark:text-[#F5F5F7] font-bold shadow-xs border border-black/[0.04] dark:border-white/[0.06]"
                 : "text-[#8B95A1] dark:text-[#86868B] hover:text-[#191F28] dark:hover:text-[#F5F5F7] font-medium"
@@ -127,15 +129,17 @@ export const OperationsSidebar: React.FC<OperationsSidebarProps> = ({
             title={t("orderListTitle")}
           >
             <Box
-              className={`w-3.5 h-3.5 ${
+              className={`w-3.5 h-3.5 shrink-0 ${
                 activeTab === "orders"
                   ? "text-[#0071E3] dark:text-[#2997FF]"
                   : "text-[#8B95A1] dark:text-[#86868B]"
               }`}
             />
-            <span className="truncate">{t("orderListTitle")}</span>
+            <span className="truncate whitespace-nowrap">
+              {t("orderListTitle")}
+            </span>
             <span
-              className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full tabular-nums ${
+              className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full tabular-nums shrink-0 ${
                 activeTab === "orders"
                   ? "bg-[#0071E3]/10 dark:bg-[#2997FF]/15 text-[#0071E3] dark:text-[#2997FF]"
                   : "bg-black/5 dark:bg-white/5 text-[#86868B]"

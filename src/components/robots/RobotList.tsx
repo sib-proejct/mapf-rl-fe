@@ -359,41 +359,43 @@ const RobotCard = memo<RobotCardProps>(
             </div>
             <span
               title={robot.id}
-              className="truncate font-mono text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight"
+              className="truncate font-mono text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight whitespace-nowrap"
             >
               {robot.id}
             </span>
             {robot.connectivity === "DISCONNECTED" && (
-              <WifiOff className="w-3 h-3 text-[#FF3B30] dark:text-[#FF453A]" />
+              <WifiOff className="w-3 h-3 text-[#FF3B30] dark:text-[#FF453A] shrink-0" />
             )}
           </div>
 
           {!isSelected && (
             <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-[10px] text-[#86868B]">
               <span
-                className="flex shrink-0 items-center gap-1 font-mono tabular-nums"
+                className="flex shrink-0 items-center gap-1 font-mono tabular-nums whitespace-nowrap"
                 title={language === "ko" ? "배터리" : "Battery"}
               >
-                <Battery className="w-3.5 h-3.5 text-[#34C759] dark:text-[#30D158]" />
+                <Battery className="w-3.5 h-3.5 text-[#34C759] dark:text-[#30D158] shrink-0" />
                 {batteryPercent === undefined
                   ? "—"
                   : `${batteryPercent.toFixed(1)}%`}
               </span>
               <span
-                className="flex min-w-0 items-center gap-1 font-mono"
+                className="flex shrink-0 items-center gap-1 font-mono whitespace-nowrap"
                 title={language === "ko" ? "위치 (m)" : "Position (m)"}
               >
-                <MapPin className="w-3 h-3 text-[#0071E3] dark:text-[#2997FF]" />
+                <MapPin className="w-3 h-3 text-[#0071E3] dark:text-[#2997FF] shrink-0" />
                 {formatCoordinates(robot.pose.xMeters, robot.pose.yMeters)}
               </span>
             </div>
           )}
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
             <div
               className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold whitespace-nowrap ${badge.bg} ${badge.text}`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
-              <span>{badge.label}</span>
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${badge.dot}`}
+              />
+              <span className="whitespace-nowrap">{badge.label}</span>
             </div>
             <div className="text-[#86868B] pl-0.5">
               {isSelected ? (

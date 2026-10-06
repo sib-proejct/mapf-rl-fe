@@ -10,3 +10,4 @@ src/contracts/provisioning.generated.ts
 src/contracts/queue.generated.ts
 
 src/contracts/buffer.generated.ts
+src/contracts/fixtures/warehouse-mega-map.json

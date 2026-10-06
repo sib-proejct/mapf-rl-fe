@@ -15,7 +15,6 @@ import {
   Box,
   FileText,
   HelpCircle,
-  Plus,
   Zap,
 } from "lucide-react";
 
@@ -46,7 +45,6 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     mockScenario,
     setMockScenario,
     connectionState,
-    setIsOrderModalOpen,
   } = useOperations();
 
   const env = import.meta.env.VITE_MAPF_PUBLIC_ENVIRONMENT || "LOCAL";
@@ -216,17 +214,6 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
         </button>
         {/* Right: Quick Action Controls, Transport, Env & Toggles */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Quick Action: New Dispatch Order Button */}
-          <button
-            type="button"
-            onClick={() => setIsOrderModalOpen(true)}
-            className="px-3 py-1.5 rounded-full bg-[#0071E3] dark:bg-[#2997FF] text-white text-xs font-bold hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-sm cursor-pointer"
-            title="Create New Dispatch Order (UUIDv4)"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">New Order</span>
-          </button>
-
           {/* Transport Mode & Scenario Selector Ribbon */}
           <div className="hidden 2xl:flex items-center gap-1 bg-[#F5F5F7] dark:bg-[#1C1C1E] p-1 rounded-full border border-black/[0.06] dark:border-white/[0.08] text-xs">
             {/* Fixture Stream */}

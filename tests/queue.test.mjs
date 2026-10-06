@@ -197,16 +197,15 @@ test("queue events ignore duplicate/stale versions and snapshots recover uncerta
   assert.equal(state.snapshot.queueTasks.length, 1);
   assert.equal(state.snapshot.queueTasks[0].state, "Running");
   const manager = new MutationManager();
-  const creation = manager.startMutation(
-    "CREATE_ORDER",
-    { tasks: [{ steps: task.steps }] },
-    undefined,
-    undefined,
-    id,
-  );
+  const creation = manager.startMutation("CREATE_ORDER", {
+    tasks: [{ steps: task.steps }],
+  });
   manager.markUncertain(creation.requestId, "timeout");
-  manager.reconcileWithSnapshot({ ...snapshot, queueTasks: [task] });
-  assert.equal(manager.get(id).state, "confirmed");
+  manager.reconcileWithSnapshot({
+    ...snapshot,
+    queueTasks: [{ ...task, requestId: creation.requestId }],
+  });
+  assert.equal(manager.get(creation.requestId).state, "confirmed");
   const cancellation = manager.startMutation(
     "CANCEL_QUEUE_TASK",
     { taskId: id },

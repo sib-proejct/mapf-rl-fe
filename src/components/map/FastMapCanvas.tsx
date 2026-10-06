@@ -1,4 +1,14 @@
+import { useCanvasRendering } from "./useCanvasRendering.ts";
+import { resizeCanvas } from "../../utils/performance/canvasScheduler.ts";
+import {
+  findRobotOrder,
+  selectionColor,
+  selectionFill,
+} from "./mapRobotDisplay.ts";
 import { NodeMoveConfirmation } from "./NodeMoveConfirmation.tsx";
+import { usePlannedRobotRoute } from "./usePlannedRobotRoute.ts";
+import { drawPlannedRoute } from "./drawPlannedRoute.ts";
+import { PlannedRouteStatus } from "./PlannedRouteStatus.tsx";
 import { useRobotTrails } from "./useRobotTrails.ts";
 import React, {
   useState,
@@ -54,6 +64,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
   const {
     snapshot,
+    connectionState,
     selectedRobotId,
     setSelectedRobotId,
     robotPlacementNodeIds,
@@ -65,8 +76,21 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
   const map = snapshot?.map;
   const robots = useMemo(() => snapshot?.robots || [], [snapshot?.robots]);
-  const robotTrails = useRobotTrails(robots, `${map?.mapId}:${map?.revision}`);
   const orders = useMemo(() => snapshot?.orders || [], [snapshot?.orders]);
+  const plannedRoutes = usePlannedRobotRoute(
+    robots,
+    orders,
+    map,
+    selectedRobotId,
+  );
+  const selectedRobot = robots.find((robot) => robot.id === selectedRobotId);
+  const selectedOrder = selectedRobot
+    ? findRobotOrder(selectedRobot, orders, map?.mapId, map?.revision)
+    : undefined;
+  const selectedPlannedRoute = selectedRobotId
+    ? plannedRoutes.get(selectedRobotId)
+    : undefined;
+  const robotTrails = useRobotTrails(robots, orders, map?.mapId, map?.revision);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,14 +116,17 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
   } | null>(null);
 
   // Performance metrics state (HUD)
-  const [fps, setFps] = useState<number>(60);
+  const [fps, setFps] = useState<number>(0);
   const [renderTimeMs, setRenderTimeMs] = useState<number>(0);
   const [visibleRobotCount, setVisibleRobotCount] = useState<number>(0);
 
   const widthCells = map?.widthCells || 32;
   const heightCells = map?.heightCells || 20;
   const resolution = map?.resolutionMeters || 1.0;
-  const origin = map?.origin || { xMeters: 0, yMeters: 0 };
+  const origin = useMemo(
+    () => map?.origin || { xMeters: 0, yMeters: 0 },
+    [map?.origin],
+  );
 
   const worldWidth = widthCells * resolution;
   const worldHeight = heightCells * resolution;
@@ -164,7 +191,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
   const frameCountRef = useRef<number>(0);
   const accumulatedRenderTimeRef = useRef<number>(0);
   const lastFpsCalcRef = useRef<number>(performance.now());
-  const rafRef = useRef<number | null>(null);
+  const idleTimerRef = useRef<number | null>(null);
 
   // Offscreen canvas for static background cache
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -503,9 +530,10 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     }
 
     bgCanvasRef.current = bgCanvas;
+    requestDraw();
   }, [map, topology, baseWidth, baseHeight, widthCells, heightCells, isDark]);
 
-  // Main 60 FPS Render Loop
+  // Draw only when invalidated, at most 30 FPS
   const renderFrame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -516,13 +544,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
 
-    if (
-      canvas.width !== rect.width * dpr ||
-      canvas.height !== rect.height * dpr
-    ) {
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-    }
+    if (!resizeCanvas(canvas, rect.width, rect.height, dpr)) return;
 
     ctx.save();
     ctx.scale(canvas.width / rect.width, canvas.height / rect.height);
@@ -610,6 +632,18 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     }
 
     // 4. Observed movement trail, displayed as a dashed line.
+    if (selectedPlannedRoute) {
+      drawPlannedRoute(
+        ctx,
+        selectedPlannedRoute.points,
+        mapDim,
+        baseWidth,
+        baseHeight,
+        zoom,
+        isDark,
+      );
+    }
+
     if (showTrails) {
       ctx.save();
       ctx.lineCap = "round";
@@ -640,43 +674,60 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     const arrowTip = robotRadius * 0.72;
     const arrowBase = robotRadius * 0.36;
 
-    if (showGoals && orders.length > 0) {
+    if ((showGoals || selectedRobotId) && orders.length > 0) {
       ctx.save();
-      for (const order of orders) {
-        if (["Completed", "Cancelled", "Rejected"].includes(order.state))
+      const goals = robots.flatMap((robot) => {
+        const order = findRobotOrder(robot, orders, map?.mapId, map?.revision);
+        return (
+          order?.assignments.filter((assign) => assign.robotId === robot.id) ??
+          []
+        );
+      });
+      goals.sort(
+        (a, b) =>
+          Number(a.robotId === selectedRobotId) -
+          Number(b.robotId === selectedRobotId),
+      );
+      for (const assign of goals) {
+        if (!showGoals && assign.robotId !== selectedRobotId) continue;
+        const gx = (assign.goalColumn + 0.5) * cellW;
+        const gy = (heightCells - 1 - assign.goalRow + 0.5) * cellH;
+
+        if (
+          gx < viewLeft - 30 ||
+          gx > viewRight + 30 ||
+          gy < viewTop - 30 ||
+          gy > viewBottom + 30
+        ) {
           continue;
-        for (const assign of order.assignments) {
-          const gx = (assign.goalColumn + 0.5) * cellW;
-          const gy = (heightCells - 1 - assign.goalRow + 0.5) * cellH;
-
-          if (
-            gx < viewLeft - 30 ||
-            gx > viewRight + 30 ||
-            gy < viewTop - 30 ||
-            gy > viewBottom + 30
-          ) {
-            continue;
-          }
-
-          const isAssignedToSelected = assign.robotId === selectedRobotId;
-          const goalR = isAssignedToSelected ? cellMin * 0.55 : cellMin * 0.4;
-
-          ctx.beginPath();
-          ctx.arc(gx, gy, goalR, 0, Math.PI * 2);
-          ctx.fillStyle = isAssignedToSelected
-            ? "rgba(0, 113, 227, 0.2)"
-            : "rgba(0, 113, 227, 0.08)";
-          ctx.fill();
-          ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
-          ctx.lineWidth = isAssignedToSelected ? 2 : 1.2;
-          ctx.setLineDash([4, 3]);
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.arc(gx, gy, Math.max(2, cellMin * 0.1), 0, Math.PI * 2);
-          ctx.fillStyle = isDark ? "#2997FF" : "#0071E3";
-          ctx.fill();
         }
+
+        const isAssignedToSelected = assign.robotId === selectedRobotId;
+        const goalR = isAssignedToSelected ? cellMin * 0.55 : cellMin * 0.4;
+
+        ctx.beginPath();
+        ctx.arc(gx, gy, goalR, 0, Math.PI * 2);
+        ctx.fillStyle = isAssignedToSelected
+          ? selectionFill(isDark)
+          : "rgba(0, 113, 227, 0.08)";
+        ctx.fill();
+        ctx.strokeStyle = isAssignedToSelected
+          ? selectionColor(isDark)
+          : isDark
+            ? "#2997FF"
+            : "#0071E3";
+        ctx.lineWidth = isAssignedToSelected ? 3 : 1.2;
+        ctx.setLineDash(isAssignedToSelected ? [] : [4, 3]);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(gx, gy, Math.max(2, cellMin * 0.1), 0, Math.PI * 2);
+        ctx.fillStyle = isAssignedToSelected
+          ? selectionColor(isDark)
+          : isDark
+            ? "#2997FF"
+            : "#0071E3";
+        ctx.fill();
       }
       ctx.restore();
     }
@@ -767,12 +818,10 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
           0,
           Math.PI * 2,
         );
-        ctx.fillStyle = isDark
-          ? "rgba(41, 151, 255, 0.25)"
-          : "rgba(0, 113, 227, 0.2)";
+        ctx.fillStyle = selectionFill(isDark);
         ctx.fill();
         ctx.lineWidth = Math.max(1.5, robotRadius * 0.2);
-        ctx.strokeStyle = isDark ? "#2997FF" : "#0071E3";
+        ctx.strokeStyle = selectionColor(isDark);
         ctx.stroke();
       }
 
@@ -782,8 +831,13 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
         ctx.arc(0, 0, Math.max(3, robotRadius * 0.7), 0, Math.PI * 2);
         ctx.fillStyle = robotColor;
         ctx.fill();
-        ctx.lineWidth = 1.0;
-        ctx.strokeStyle = isDark ? "#1C1C1E" : "#FFFFFF";
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.strokeStyle =
+          isSelected && !isDisconnected && !isSafetyAlert
+            ? selectionColor(isDark)
+            : isDark
+              ? "#1C1C1E"
+              : "#FFFFFF";
         ctx.stroke();
       } else {
         // LOD Level 2: Full Detailed Robot Chassis & Direction Arrow
@@ -794,7 +848,10 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
         ctx.lineWidth = isSelected
           ? Math.max(2, robotRadius * 0.25)
           : Math.max(1.2, robotRadius * 0.18);
-        ctx.strokeStyle = robotColor;
+        ctx.strokeStyle =
+          isSelected && !isDisconnected && !isSafetyAlert
+            ? selectionColor(isDark)
+            : robotColor;
         ctx.stroke();
 
         // Heading Direction Chevron
@@ -876,6 +933,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     const frameDuration = t1 - t0;
     accumulatedRenderTimeRef.current += frameDuration;
     frameCountRef.current++;
+    setVisibleRobotCount(visibleRobots);
 
     // Calculate smoothed FPS and average render time every 600ms (eliminates React re-render thrashing & ms flicker)
     if (t1 - lastFpsCalcRef.current >= 600) {
@@ -886,19 +944,26 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
       );
       setFps(computedFps);
       setRenderTimeMs(avgRenderMs);
-      setVisibleRobotCount(visibleRobots);
       frameCountRef.current = 0;
       accumulatedRenderTimeRef.current = 0;
       lastFpsCalcRef.current = t1;
     }
 
-    rafRef.current = requestAnimationFrame(renderFrame);
+    if (idleTimerRef.current !== null)
+      window.clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = window.setTimeout(() => {
+      setFps(0);
+      frameCountRef.current = 0;
+      accumulatedRenderTimeRef.current = 0;
+      lastFpsCalcRef.current = performance.now();
+    }, 600);
   }, [
     pan,
     zoom,
     robots,
     orders,
     selectedRobotId,
+    selectedPlannedRoute,
     robotPlacementNodeIds,
     selectedNodeId,
     robotTrails,
@@ -917,12 +982,14 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     origin,
   ]);
 
-  useEffect(() => {
-    rafRef.current = requestAnimationFrame(renderFrame);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [renderFrame]);
+  const requestDraw = useCanvasRendering(canvasRef, renderFrame);
+  useEffect(
+    () => () => {
+      if (idleTimerRef.current !== null)
+        window.clearTimeout(idleTimerRef.current);
+    },
+    [],
+  );
 
   // Spatial Hit-testing on Click / MouseMove
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -958,7 +1025,9 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
     }
 
     if (clickedRobot) {
-      setSelectedRobotId(clickedRobot.id);
+      setSelectedRobotId(
+        clickedRobot.id === selectedRobotId ? null : clickedRobot.id,
+      );
       return;
     }
 
@@ -976,6 +1045,7 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
       }
     }
 
+    setSelectedRobotId(null);
     setSelectedNodeId(null);
   };
 
@@ -1179,6 +1249,12 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
           onClick={handleCanvasClick}
           className="w-full h-full block"
         />
+        <PlannedRouteStatus
+          robot={selectedRobot}
+          order={selectedOrder}
+          available={!!selectedPlannedRoute}
+          disconnected={connectionState !== "Current"}
+        />
 
         {/* Live Coordinate Tracker Badge (Top Left Overlay) */}
         {hoverCoord && (
@@ -1313,15 +1389,11 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
           <div className="flex items-center gap-1">
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                fps >= 55
-                  ? "bg-[#34C759]"
-                  : fps >= 30
-                    ? "bg-[#FF9F0A]"
-                    : "bg-[#FF3B30]"
+                fps === 0 ? "bg-[#86868B]" : "bg-[#34C759]"
               }`}
             />
             <span className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-              {fps} FPS
+              {fps === 0 ? (language === "ko" ? "유휴" : "Idle") : `${fps} FPS`}
             </span>
           </div>
 

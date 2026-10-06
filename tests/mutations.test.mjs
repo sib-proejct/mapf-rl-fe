@@ -145,3 +145,43 @@ test("Reconnection Reconciliation: reconciles uncertain mutation against fresh a
     "Uncertain cancel must reconcile to confirmed when snapshot reflects Cancelled state",
   );
 });
+
+test("map round trip clears previous intents and locks and rejects old request IDs", () => {
+  const manager = new MutationManager();
+  manager.setMapGeneration(7);
+  const payload = { mapId: "standard", task: { robotId: "r-001", steps: [] } };
+  const submitting = manager.startMutation("CREATE_ORDER", payload);
+  const uncertain = manager.startMutation("CANCEL_ORDER", {
+    orderId: "old-order",
+  });
+  manager.markUncertain(uncertain.requestId);
+  assert.equal(submitting.mapGeneration, 7);
+  manager.setMapGeneration(7);
+  assert.equal(manager.get(submitting.requestId), submitting);
+
+  const notifications = [];
+  manager.subscribe((mutations) => notifications.push(mutations.length));
+  manager.setMapGeneration(8);
+  manager.setMapGeneration(9);
+  assert.deepEqual(manager.getAll(), []);
+  assert.deepEqual(notifications, [2, 0, 0]);
+  for (const mutation of [submitting, uncertain]) {
+    assert.throws(
+      () =>
+        manager.startMutation(
+          mutation.operation,
+          mutation.payload,
+          undefined,
+          undefined,
+          mutation.requestId,
+        ),
+      /이전 요청을 재시도할 수 없습니다/,
+    );
+  }
+  // Responses and timeouts from the old generation must not restore its requests.
+  assert.equal(manager.confirmMutation(submitting.requestId), undefined);
+  assert.equal(manager.markUncertain(uncertain.requestId), undefined);
+  const fresh = manager.startMutation("CREATE_ORDER", payload);
+  assert.equal(fresh.mapGeneration, 9);
+  assert.notEqual(fresh.requestId, submitting.requestId);
+});
