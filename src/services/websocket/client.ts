@@ -1,3 +1,4 @@
+import { mapGenerationUrl } from "../maps/mapGeneration.ts";
 /**
  * WebSocket client for Core /ws/v1 with automatic jittered reconnection and lifecycle management.
  */
@@ -76,7 +77,7 @@ export class CoreWsClient {
     this.setState("ConnectingStream");
 
     try {
-      this.socket = new WebSocket(this.url, this.subprotocol);
+      this.socket = new WebSocket(mapGenerationUrl(this.url), this.subprotocol);
 
       this.socket.onopen = () => {
         this.backoff.reset();

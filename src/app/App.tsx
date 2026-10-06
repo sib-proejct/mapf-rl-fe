@@ -4,6 +4,7 @@ import {
   ThemeLanguageProvider,
   useAppConfig,
 } from "./providers/ThemeLanguageContext.tsx";
+import { LiveMapControl } from "./providers/LiveMapControl.tsx";
 import { OperationsProvider } from "./providers/OperationsContext.tsx";
 import { TopNavBar, NavTab } from "../components/common/TopNavBar.tsx";
 import { OperationsPage } from "../pages/OperationsPage.tsx";
@@ -66,9 +67,11 @@ const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <ThemeLanguageProvider>
-      <OperationsProvider>
-        <AppContent />
-      </OperationsProvider>
+      <LiveMapControl>
+        <OperationsProvider>
+          <AppContent />
+        </OperationsProvider>
+      </LiveMapControl>
     </ThemeLanguageProvider>
   );
 };

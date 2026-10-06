@@ -1,3 +1,4 @@
+import { mapGenerationUrl } from "../maps/mapGeneration.ts";
 import { TELEMETRY_VERSION } from "../../contracts/generated.ts";
 import { adaptRobotStateReport } from "../../contracts/adapters/eventAdapter.ts";
 
@@ -48,7 +49,7 @@ export class TelemetryClient {
   private connect(): void {
     const scheme = window.location.protocol === "https:" ? "wss" : "ws";
     const socket = new WebSocket(
-      `${scheme}://${window.location.host}/ws/v1/telemetry`,
+      mapGenerationUrl(`${scheme}://${window.location.host}/ws/v1/telemetry`),
       "mapf.telemetry.v1",
     );
     this.socket = socket;

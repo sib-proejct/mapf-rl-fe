@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
+import { useLiveMapControl } from "../../app/providers/LiveMapControl.tsx";
 import {
   useOperations,
   type FleetScale,
@@ -208,10 +209,24 @@ export const BentoStatusRail: React.FC = () => {
     : language === "ko"
       ? "맵 로딩 중"
       : "Loading map";
+  const {
+    state: liveMapState,
+    available: liveMapAvailable,
+    activate: activateLiveMap,
+  } = useLiveMapControl();
   const liveMapHint =
     language === "ko"
-      ? "Live 맵 선택은 추후 지원됩니다"
-      : "Live map selection will be supported in the future";
+      ? "로봇 등록은 보존하고 선택한 맵의 작업 상태를 초기화합니다. 한 번에 하나의 맵만 실행합니다."
+      : "Preserve registered robots and reset the selected map's work state. Only one map runs at a time.";
+  const liveTargets = (liveMapState?.maps ?? []).map((map) => ({
+    ...map,
+    labelKo: map.mapType === "mega" ? "메가 맵 (64×40)" : "표준 맵 (32×20)",
+    labelEn: map.mapType === "mega" ? "Mega (64×40)" : "Standard (32×20)",
+  }));
+  const currentLiveMapId = snapshot?.map?.mapId ?? "";
+  const currentLiveTarget = liveTargets.find(
+    (target) => target.mapId === currentLiveMapId,
+  );
 
   return (
     <div className="space-y-2.5 relative z-30">
@@ -553,7 +568,7 @@ export const BentoStatusRail: React.FC = () => {
             )}
           </div>
 
-          {/* Fixture presets; live maps are owned by Core. */}
+          {/* Live selection opens an isolated Core-owned map environment. */}
           <div
             className="relative flex items-center"
             title={transportMode === "FIXTURE_STREAM" ? undefined : liveMapHint}
@@ -604,16 +619,35 @@ export const BentoStatusRail: React.FC = () => {
                 <>
                   <select
                     id="map-preset-select"
-                    value={liveMapLabel}
+                    value={currentLiveMapId}
+                    disabled={
+                      !liveMapAvailable ||
+                      !snapshot?.map ||
+                      liveTargets.length === 0
+                    }
+                    onChange={(event) => {
+                      const target = liveTargets.find(
+                        (item) => item.mapId === event.target.value,
+                      );
+                      if (target && target.mapId !== currentLiveMapId) {
+                        void activateLiveMap(target.mapId);
+                      }
+                    }}
                     aria-describedby="live-map-selection-hint"
                     className="appearance-none bg-transparent outline-none cursor-pointer font-medium text-[11px] pr-1 text-inherit"
                   >
-                    <option
-                      value={liveMapLabel}
-                      className="bg-white dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-[#F5F5F7]"
-                    >
-                      {liveMapLabel}
-                    </option>
+                    {!currentLiveTarget && (
+                      <option value={currentLiveMapId}>{liveMapLabel}</option>
+                    )}
+                    {liveTargets.map((target) => (
+                      <option
+                        key={target.mapId}
+                        value={target.mapId}
+                        className="bg-white dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-[#F5F5F7]"
+                      >
+                        {language === "ko" ? target.labelKo : target.labelEn}
+                      </option>
+                    ))}
                   </select>
                   <ChevronDown className="w-3 h-3 text-[#86868B] pointer-events-none shrink-0" />
                   <span id="live-map-selection-hint" className="sr-only">

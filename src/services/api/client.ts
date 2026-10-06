@@ -1,3 +1,8 @@
+import {
+  isLiveMapAvailable,
+  mapGenerationHeaders,
+} from "../maps/mapGeneration.ts";
+import type { LocalMapState } from "../../contracts/local-map-control.generated.ts";
 import { adaptMotionProfiles } from "../../contracts/adapters/motionProfile.ts";
 import type {
   MotionProfilesOutcome,
@@ -137,6 +142,41 @@ export class CoreApiClient {
     this.csrfTokenProvider = csrfTokenProvider;
   }
 
+  async fetchLocalMaps(): Promise<LocalMapState | null> {
+    try {
+      const value = (await this.getJson("/api/v1/local-maps", {
+        signal: AbortSignal.timeout(5000),
+      })) as LocalMapState;
+      if (
+        value.contractVersion !== "1.0.0" ||
+        !Number.isInteger(value.generation) ||
+        !["ACTIVE", "STOPPING", "RESETTING", "PREPARING", "FAILED"].includes(
+          value.phase,
+        ) ||
+        !Array.isArray(value.maps)
+      )
+        throw new Error("Invalid local map control response");
+      return value;
+    } catch (err) {
+      if (err instanceof ProblemError && err.problem.status === 404)
+        return null;
+      throw err;
+    }
+  }
+
+  async activateLocalMap(
+    mapId: string,
+    generation: number,
+  ): Promise<LocalMapState> {
+    const requestId = crypto.randomUUID();
+    const result = await this.postMutation(
+      `${this.baseUrl}/api/v1/local-maps/activate`,
+      { contractVersion: "1.0.0", requestId, mapId, generation },
+      { requestId, timeoutMs: 10000 },
+    );
+    return result.data as LocalMapState;
+  }
+
   /**
    * Fetches the authoritative operator snapshot from /api/v1/operations/snapshot.
    */
@@ -152,6 +192,7 @@ export class CoreApiClient {
   ): Promise<unknown> {
     const url = `${this.baseUrl}${path}`;
     const headers: Record<string, string> = {
+      ...mapGenerationHeaders(),
       Accept: "application/json, application/problem+json",
     };
 
@@ -400,6 +441,21 @@ export class CoreApiClient {
     body: unknown,
     options: MutationRequestOptions,
   ): Promise<MutationOutcome> {
+    if (
+      !isLiveMapAvailable() &&
+      url !== `${this.baseUrl}/api/v1/local-maps/activate`
+    ) {
+      throw new ProblemError(
+        normalizeProblem({
+          status: 409,
+          code: "LOCAL_MAP_UNAVAILABLE",
+          title:
+            "Live controls are unavailable until the map connection recovers",
+          requestId: options.requestId,
+          retryable: false,
+        }),
+      );
+    }
     const csrfToken = this.csrfTokenProvider();
     if (!csrfToken) {
       throw new ProblemError(
@@ -415,6 +471,7 @@ export class CoreApiClient {
     }
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      ...mapGenerationHeaders(),
       Accept: "application/json, application/problem+json",
       "X-CSRF-Token": csrfToken,
     };

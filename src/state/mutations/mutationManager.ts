@@ -24,9 +24,18 @@ import {
 export type MutationListener = (mutations: PendingMutation[]) => void;
 
 export class MutationManager {
+  private mapGeneration: number | null = null;
   private mutations: Map<string, PendingMutation> = new Map();
   private inFlightDigests: Set<string> = new Set();
   private listeners: Set<MutationListener> = new Set();
+
+  setMapGeneration(generation: number | null): void {
+    if (generation === this.mapGeneration) return;
+    this.mapGeneration = generation;
+    this.mutations.clear();
+    this.inFlightDigests.clear();
+    this.notify();
+  }
 
   /**
    * Subscribes a listener to pending mutation state updates.
@@ -80,9 +89,16 @@ export class MutationManager {
 
     const requestId = forcedRequestId || generateUuidV4();
     const existing = this.mutations.get(requestId);
+    if (
+      forcedRequestId &&
+      (!existing || existing.mapGeneration !== this.mapGeneration)
+    ) {
+      throw new Error("맵이 변경되어 이전 요청을 재시도할 수 없습니다.");
+    }
 
     const mutation: PendingMutation<TPayload> = {
       requestId,
+      mapGeneration: this.mapGeneration,
       operation,
       state: "submitting",
       payload,
