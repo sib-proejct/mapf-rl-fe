@@ -411,8 +411,8 @@ export const QueueTaskList: React.FC<QueueTaskListProps> = ({
                 >
                   {task.reason === "CARGO_RECOVERY_REQUIRED"
                     ? ko
-                      ? "화물이 남아 있습니다. 이 로봇을 지정한 PLACE 작업으로 복구하세요."
-                      : "Cargo remains. Queue a PLACE task for this robot to recover."
+                      ? "화물이 남아 있습니다. 다시 취소하면 정지 확인 후 작업이 취소 이력으로 이동합니다. 화물은 유지되며 PLACE 작업으로 처리할 수 있습니다."
+                      : "Cargo remains. Cancel again to move this task to history once stopped. Cargo is retained and can be handled with a PLACE task."
                     : reasonText(task.reason)}
                 </p>
               )}
