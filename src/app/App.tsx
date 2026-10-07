@@ -1,12 +1,13 @@
 import { MotionProfilesPage } from "../pages/MotionProfilesPage.tsx";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ThemeLanguageProvider,
   useAppConfig,
 } from "./providers/ThemeLanguageContext.tsx";
 import { LiveMapControl } from "./providers/LiveMapControl.tsx";
 import { OperationsProvider } from "./providers/OperationsContext.tsx";
-import { TopNavBar, NavTab } from "../components/common/TopNavBar.tsx";
+import { TopNavBar } from "../components/common/TopNavBar.tsx";
+import { pageFromPath, pagePaths } from "./navigation.ts";
 import { OperationsPage } from "../pages/OperationsPage.tsx";
 import {
   OrdersPage,
@@ -17,7 +18,18 @@ import {
 
 const AppContent: React.FC = () => {
   const { t } = useAppConfig();
-  const [currentTab, setCurrentTab] = useState<NavTab>("operations");
+  const [currentTab, setCurrentTab] = useState(() =>
+    pageFromPath(window.location.pathname),
+  );
+
+  useEffect(() => {
+    const onPopState = () => {
+      setCurrentTab(pageFromPath(window.location.pathname));
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#FBFBFD] dark:bg-black text-[#1D1D1F] dark:text-[#F5F5F7] flex flex-col font-sans selection:bg-[#0071E3]/15 selection:text-[#0071E3] transition-colors duration-300">
@@ -25,6 +37,13 @@ const AppContent: React.FC = () => {
       <TopNavBar
         currentTab={currentTab}
         onSelectTab={(tab) => {
+          if (window.location.pathname !== pagePaths[tab]) {
+            window.history.pushState(
+              null,
+              "",
+              pagePaths[tab] + window.location.search,
+            );
+          }
           setCurrentTab(tab);
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}

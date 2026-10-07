@@ -1,4 +1,5 @@
 import React from "react";
+import { pagePaths, type NavTab } from "../../app/navigation.ts";
 import { useAppConfig } from "../../app/providers/ThemeLanguageContext.tsx";
 import {
   useOperations,
@@ -17,14 +18,6 @@ import {
   HelpCircle,
   Zap,
 } from "lucide-react";
-
-export type NavTab =
-  | "operations"
-  | "orders"
-  | "scenarios"
-  | "policies"
-  | "events"
-  | "motion";
 
 interface TopNavBarProps {
   currentTab: NavTab;
@@ -180,9 +173,22 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
             ].map((tab) => {
               const isActive = currentTab === tab.id;
               return (
-                <button
+                <a
                   key={`nav-tab-${tab.id}`}
-                  onClick={() => onSelectTab(tab.id as NavTab)}
+                  href={pagePaths[tab.id as NavTab] + window.location.search}
+                  aria-current={isActive ? "page" : undefined}
+                  onClick={(event) => {
+                    if (
+                      event.button !== 0 ||
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey
+                    )
+                      return;
+                    event.preventDefault();
+                    onSelectTab(tab.id as NavTab);
+                  }}
                   className={`relative px-3.5 py-2 text-xs font-semibold rounded-full transition-all duration-200 cursor-pointer ${
                     isActive
                       ? "text-[#0071E3] dark:text-[#2997FF] bg-black/[0.03] dark:bg-white/[0.06]"
@@ -193,25 +199,27 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
                   {isActive && (
                     <span className="absolute bottom-0.5 left-3 right-3 h-0.5 bg-[#0071E3] dark:bg-[#2997FF] rounded-full" />
                   )}
-                </button>
+                </a>
               );
             })}
           </nav>
         </div>
 
-        <button
-          type="button"
-          className="xl:hidden text-xs text-[#0071E3] whitespace-nowrap"
-          onClick={() =>
-            onSelectTab(currentTab === "motion" ? "operations" : "motion")
-          }
+        <select
+          aria-label={language === "ko" ? "화면 선택" : "Select page"}
+          className="xl:hidden min-w-0 bg-transparent text-xs text-[#0071E3]"
+          value={currentTab}
+          onChange={(event) => onSelectTab(event.target.value as NavTab)}
         >
-          {currentTab === "motion"
-            ? t("navOperations")
-            : language === "ko"
-              ? "속도 설정"
-              : "Motion"}
-        </button>
+          <option value="operations">{t("navOperations")}</option>
+          <option value="orders">{t("navOrders")}</option>
+          <option value="scenarios">{t("navScenarios")}</option>
+          <option value="policies">{t("navPolicies")}</option>
+          <option value="events">{t("navEvents")}</option>
+          <option value="motion">
+            {language === "ko" ? "속도 프로파일" : "Motion profiles"}
+          </option>
+        </select>
         {/* Right: Quick Action Controls, Transport, Env & Toggles */}
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Transport Mode & Scenario Selector Ribbon */}

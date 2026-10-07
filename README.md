@@ -11,6 +11,21 @@ model-based Reinforcement Learning을 AGV, AMR 로봇의 path finding에 적용�
 
 ## 웹 화면
 
+각 화면은 개별 URL로 직접 접속할 수 있으며 새로고침과 브라우저 뒤로/앞으로 이동을 지원한다.
+상단 메뉴 링크는 새 탭으로도 열 수 있다.
+
+| 화면          | 경로          |
+| ------------- | ------------- |
+| 운영          | `/operations` |
+| 오더          | `/orders`     |
+| 시나리오      | `/scenarios`  |
+| 정책          | `/policies`   |
+| 이벤트        | `/events`     |
+| 속도 프로파일 | `/motion`     |
+
+`/`와 알 수 없는 경로는 운영 화면을 표시한다. 정적 호스팅 서버는 화면 경로 요청에
+`index.html`을 반환해야 한다. 저장소의 Nginx 설정과 Vite 개발 서버는 이를 지원한다.
+
 운영(Operations) 화면 — Fixture 10Hz 모드의 예시 데이터로 맵과 로봇 함대, 작업 큐를 표시한다.
 
 ![MAPF-RL 운영 화면: 창고 맵, 로봇 함대 상태, 작업 큐](docs/images/operations-fixture.png)
