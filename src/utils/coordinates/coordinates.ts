@@ -180,3 +180,29 @@ export function formatNodeId(nodeId: number, cell?: GridCell): string {
   }
   return `Node ${nodeId}`;
 }
+
+/** Finds the closest grid node within the screen-space hit radius. */
+export function findNearestScreenNode<T extends GridCell>(
+  nodes: readonly T[],
+  point: Point2D,
+  widthCells: number,
+  heightCells: number,
+  canvasWidth: number,
+  canvasHeight: number,
+  hitRadius: number,
+): T | null {
+  const cellWidth = canvasWidth / widthCells;
+  const cellHeight = canvasHeight / heightCells;
+  let nearest: T | null = null;
+  let nearestDistance = hitRadius;
+  for (const node of nodes) {
+    const x = (node.column + 0.5) * cellWidth;
+    const y = (heightCells - node.row - 0.5) * cellHeight;
+    const distance = Math.hypot(point.x - x, point.y - y);
+    if (distance < nearestDistance) {
+      nearest = node;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}

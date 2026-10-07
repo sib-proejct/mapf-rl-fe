@@ -1,29 +1,29 @@
 /**
- * Large-Scale 64x40 Automated Fulfillment Center Map Fixture (2,560 cells, 1.0m/cell).
+ * Large-Scale 66x40 Automated Fulfillment Center Map Fixture (2,640 cells, 1.0m/cell).
  * Designed for 100+ AMR/AGV high-capacity operations and stress benchmarking.
  */
 import type { RasterMap } from "../../domain/map/types.ts";
 
-export const MEGA_WIDTH_CELLS = 64;
+export const MEGA_WIDTH_CELLS = 66;
 export const MEGA_HEIGHT_CELLS = 40;
 
 /**
- * Structural pillars distribution for 64x40 facility.
+ * Structural pillars distribution for 66x40 facility.
  */
 export function isMegaPillarCell(col: number, row: number): boolean {
-  const pillarCols = [7, 19, 31, 43, 55];
+  const pillarCols = [9, 21, 33, 45, 57];
   const pillarRows = [8, 16, 24, 32];
   return pillarCols.includes(col) && pillarRows.includes(row);
 }
 
 /**
- * Rack columns in 64-column layout (15 storage bays: Bay A ~ Bay O).
+ * Rack columns in 66-column layout (15 storage bays: Bay A ~ Bay O).
  * Each bay is 2 cells wide with 2-cell wide aisles in between.
  */
 export const MEGA_RACK_COLS = [
   2, 3, 6, 7, 10, 11, 14, 15, 18, 19, 22, 23, 26, 27, 30, 31, 34, 35, 38, 39,
   42, 43, 46, 47, 50, 51, 54, 55, 58, 59,
-];
+].map((column) => column + 2);
 
 export const MEGA_BAY_NAMES = [
   "A",
@@ -95,7 +95,7 @@ export function isMegaRackCell(
 }
 
 /**
- * Generate 64x40 cell grid.
+ * Generate 66x40 cell grid.
  */
 export function generateMegaWarehouseCells(): number[] {
   const cells: number[] = [];
@@ -130,7 +130,7 @@ export const MEGA_WAREHOUSE_MAP_FIXTURE: RasterMap = {
     zAxis: "UP",
     yaw: "COUNTERCLOCKWISE_FROM_POSITIVE_X_RADIANS",
   },
-  origin: { xMeters: 0.0, yMeters: 0.0 },
+  origin: { xMeters: -2.0, yMeters: 0.0 },
   resolutionMeters: 1.0,
   widthCells: MEGA_WIDTH_CELLS,
   heightCells: MEGA_HEIGHT_CELLS,

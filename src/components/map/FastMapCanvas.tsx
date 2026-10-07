@@ -33,6 +33,7 @@ import {
   Boxes,
 } from "lucide-react";
 import {
+  findNearestScreenNode,
   worldToScreen,
   cellToWorld,
   worldToCell,
@@ -1033,15 +1034,18 @@ export const FastMapCanvas: React.FC<FastMapCanvasProps> = ({
 
     // 2. Check station node hits
     if (topology) {
-      const cellW = baseWidth / widthCells;
-      const cellH = baseHeight / heightCells;
-      for (const node of topology.nodes) {
-        const nx = (node.column + 0.5) * cellW;
-        const ny = (heightCells - 1 - node.row + 0.5) * cellH;
-        if (Math.hypot(clickCanvasX - nx, clickCanvasY - ny) < 16) {
-          void clickNode(node.id);
-          return;
-        }
+      const node = findNearestScreenNode(
+        topology.nodes,
+        { x: clickCanvasX, y: clickCanvasY },
+        widthCells,
+        heightCells,
+        baseWidth,
+        baseHeight,
+        16,
+      );
+      if (node) {
+        void clickNode(node.id);
+        return;
       }
     }
 

@@ -3,6 +3,7 @@ import test from "node:test";
 
 // Test coordinate functions (pure JS implementations matching the TS utilities)
 import {
+  findNearestScreenNode,
   cellToWorld,
   worldToCell,
   worldToScreen,
@@ -125,4 +126,26 @@ test("cellToNodeId and nodeIdToCell perform accurate conversions", () => {
 test("formatNodeId formats node with and without grid cell", () => {
   assert.equal(formatNodeId(42), "Node 42");
   assert.equal(formatNodeId(42, { column: 10, row: 2 }), "Node 42 (10, 2)");
+});
+
+test("dense map hits select the closest node despite overlapping hit radii", () => {
+  const nodes = [
+    { id: 1, column: 20, row: 10 },
+    { id: 2, column: 20, row: 11 },
+    { id: 3, column: 20, row: 12 },
+  ];
+  // Five pixels per cell: all three nodes fall within the old 16px radius.
+  for (const node of nodes) {
+    const point = { x: 102.5, y: (80 - node.row - 0.5) * 5 };
+    for (const ordered of [nodes, [...nodes].reverse()]) {
+      assert.equal(
+        findNearestScreenNode(ordered, point, 160, 80, 800, 400, 16)?.id,
+        node.id,
+      );
+    }
+  }
+  assert.equal(
+    findNearestScreenNode(nodes, { x: 0, y: 0 }, 160, 80, 800, 400, 16),
+    null,
+  );
 });

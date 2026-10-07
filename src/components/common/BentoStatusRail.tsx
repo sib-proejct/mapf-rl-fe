@@ -198,9 +198,9 @@ export const BentoStatusRail: React.FC = () => {
     {
       id: "mega-100",
       scale: 100,
-      labelKo: "메가 맵 (64×40)",
-      labelEn: "Mega (64×40)",
-      desc: "Mega Warehouse 64x40 Grid",
+      labelKo: "메가 맵 (66×40)",
+      labelEn: "Mega (66×40)",
+      desc: "Mega Warehouse 66x40 Grid",
     },
   ];
 
@@ -220,8 +220,8 @@ export const BentoStatusRail: React.FC = () => {
       : "Preserve registered robots and reset the selected map's work state. Only one map runs at a time.";
   const liveTargets = (liveMapState?.maps ?? []).map((map) => ({
     ...map,
-    labelKo: map.mapType === "mega" ? "메가 맵 (64×40)" : "표준 맵 (32×20)",
-    labelEn: map.mapType === "mega" ? "Mega (64×40)" : "Standard (32×20)",
+    labelKo: map.mapType === "mega" ? "메가 맵" : "표준 맵 (32×20)",
+    labelEn: map.mapType === "mega" ? "Mega" : "Standard (32×20)",
   }));
   const currentLiveMapId = snapshot?.map?.mapId ?? "";
   const currentLiveTarget = liveTargets.find(

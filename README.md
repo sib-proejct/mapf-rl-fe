@@ -17,6 +17,10 @@ model-based Reinforcement Learning을 AGV, AMR 로봇의 path finding에 적용�
 
 ## 전체 로컬 환경 실행 (Docker Compose)
 
+파일 감시 없는 로컬 운영용 실행은 Infra의 `compose.production.yaml`을 함께 사용한다.
+정적 FE 빌드를 Nginx로 제공하며 자세한 실행·복귀 방법은
+[Infra README](../mapf-rl-infra/README.md#로컬-운영용-fe-파일-감시-없음)를 따른다.
+
 Sibling 저장소가 같은 parent 아래 있고 Infra `.env`의 DB/Redis 설정이 준비되어 있으면:
 
 ```sh
